@@ -32,7 +32,8 @@ void SaveDisparityToPly(cv::Mat &disp, cv::Mat& img, float maxDisp,
 
 void SetupStereoParameters(std::string rootFolder, int &numDisps, int &maxDisp, int &visualizeScale);
 
-void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f);
+void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f,
+	std::vector<std::pair<std::string, void*>> auxParams = std::vector<std::pair<std::string, void*>>());
 
 void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR);
 
@@ -41,3 +42,5 @@ void InitSimVecWeights(cv::Mat &img, std::vector<SimVector> &simVecs);
 void SelfSimilarityPropagation(cv::Mat &img, cv::vector<SimVector> &simVecs);
 
 void Triangulate2DImage(cv::Mat& img, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds);
+
+cv::Mat DrawTriangleImage(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds);

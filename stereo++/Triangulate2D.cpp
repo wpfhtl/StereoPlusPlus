@@ -666,6 +666,25 @@ static int SLICSegmentation(const cv::Mat &img, const int numPreferedRegions, co
 	return numlabels;
 }
 
+cv::Mat DrawTriangleImage(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds)
+{
+	const cv::Point2d halfOffset(0.5, 0.5);
+	cv::Mat triImg(numRows, numCols, CV_8UC3);
+	triImg.setTo(cv::Vec3b(0, 0, 0));
+
+	for (int i = 0; i < triVertexInds.size(); i++) {
+		cv::Point2d p0 = vertexCoords[triVertexInds[i][0]];
+		cv::Point2d p1 = vertexCoords[triVertexInds[i][1]];
+		cv::Point2d p2 = vertexCoords[triVertexInds[i][2]];
+
+		cv::line(triImg, p0 - halfOffset, p1 - halfOffset, cv::Scalar(0, 0, 255, 255), 1, CV_AA);
+		cv::line(triImg, p0 - halfOffset, p2 - halfOffset, cv::Scalar(0, 0, 255, 255), 1, CV_AA);
+		cv::line(triImg, p1 - halfOffset, p2 - halfOffset, cv::Scalar(0, 0, 255, 255), 1, CV_AA);
+	}
+
+	return triImg;
+}
+
 void Triangulate2DImage(cv::Mat& img, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds)
 {
 	int numRows = img.rows, numCols = img.cols;

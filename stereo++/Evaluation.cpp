@@ -30,7 +30,8 @@ void SetupStereoParameters(std::string rootFolder, int &numDisps, int &maxDisp, 
 }
 
 
-void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f)
+void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f, 
+	std::vector<std::pair<std::string, void*>> auxParams = std::vector<std::pair<std::string, void*>>())
 {
 	// Step 1 - Load images, parepare parameters
 	std::string folderPrefix = "D:/data/stereo/";
@@ -103,6 +104,16 @@ void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f)
 
 	
 	// Step 3 - Prepare images for canvas
+	cv::Mat triImg, segImg;
+	for (int i = 0; i < auxParams.size(); i++) {
+		if (auxParams[i].first == "triImg") {
+			triImg = *(cv::Mat*)auxParams[i].second;
+		}
+		else if (auxParams[i].first == "segImg") {
+			segImg = *(cv::Mat*)auxParams[i].second;
+		}
+	}
+
 	cv::Mat canvas, topRow, bottomRow, gtImg, dispImg;
 	dispL.convertTo(dispImg, CV_8UC1, visualizeScale);
 	cv::cvtColor(dispImg, dispImg, CV_GRAY2BGR);
@@ -114,6 +125,14 @@ void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f)
 	cv::hconcat(badOnAll, badOnNonocc, bottomRow);
 	cv::hconcat(bottomRow, imR, bottomRow);
 	cv::vconcat(topRow, bottomRow, canvas);
+
+	cv::Mat childWindowBL = canvas(cv::Rect(0, numRows, numCols, numRows));
+	if (!triImg.empty()) {
+		triImg.copyTo(childWindowBL);
+	}
+	else if (!segImg.empty()) {
+		segImg.copyTo(childWindowBL);
+	}
 
 	void OnMouseEvaluateDisprity(int event, int x, int y, int flags, void *param);
 	void *callbackParams[] = { 

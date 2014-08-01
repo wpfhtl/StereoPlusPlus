@@ -332,6 +332,7 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 	std::vector<cv::Point2d> vertexCoords;
 	std::vector<std::vector<int>> triVertexInds;
 	Triangulate2DImage(imL, vertexCoords, triVertexInds);
+	cv::Mat triImg = DrawTriangleImage(numRows, numCols, vertexCoords, triVertexInds);
 
 	std::vector<cv::Point2d> baryCenters;
 	std::vector<std::vector<int>> nbIndices;
@@ -346,11 +347,11 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 
 	if (gMatchingCostType == ADCENSUS) {
 		gDsiL = ComputeAdCensusCostVolume(imL, imR, numDisps, -1, GRANULARITY);
-		//gDsiR = ComputeAdCensusCostVolume(imR, imL, numDisps, +1, GRANULARITY);
+		gDsiR = ComputeAdCensusCostVolume(imR, imL, numDisps, +1, GRANULARITY);
 	}
 	else if (gMatchingCostType == ADGRADIENT) {
 		gDsiL = ComputeAdGradientCostVolume(imL, imR, numDisps, -1, GRANULARITY);
-		//gDsiR = ComputeAdGradientCostVolume(imR, imL, numDisps, +1, GRANULARITY);
+		gDsiR = ComputeAdGradientCostVolume(imR, imL, numDisps, +1, GRANULARITY);
 	}
 
 	std::vector<SimVector> simVecsStdL;
@@ -360,17 +361,17 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 		bs::Timer::Tic("Precompute Similarity Weights");
 		MCImg<float> PrecomputeSimilarityWeights(cv::Mat &img, int patchRadius, int simGamma);
 		gSimWeightsL = PrecomputeSimilarityWeights(imL, PATCHRADIUS, SIMILARITYGAMMA);
-		//gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITYGAMMA);
+		gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITYGAMMA);
 		bs::Timer::Toc();
 	}
 	else if (gCostAggregationType == TOP50) {
 		bs::Timer::Tic("Begin SelfSimilarityPropagation");
 		SelfSimilarityPropagation(imL, simVecsStdL);
-		//SelfSimilarityPropagation(imR, simVecsStdR);
+		SelfSimilarityPropagation(imR, simVecsStdR);
 		InitSimVecWeights(imL, simVecsStdL);
 		//InitSimVecWeights(imR, simVecsStdR);
 		gSimVecsL = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdL[0]);
-		//gSimVecsR = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdR[0]);
+		gSimVecsR = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdR[0]);
 		bs::Timer::Toc();
 	}
 
@@ -395,7 +396,9 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 		}
 
 		cv::Mat dispL = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanes, triPixelLists);
-		EvaluateDisparity(rootFolder, dispL, 0.5f);
+		std::vector<std::pair<std::string, void*>> auxParams;
+		auxParams.push_back(std::pair<std::string, void*>("triImg", &triImg));
+		EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
 
 		std::reverse(idList.begin(), idList.end());
 	}

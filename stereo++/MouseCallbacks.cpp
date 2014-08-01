@@ -4,6 +4,11 @@
 
 #include "StereoAPI.h"
 
+/* Note: each OnMouse callback function should take a fixed list of parameters.
+ * It is the caller's responsibility to prepare different parameter lists for
+ * different OnMouse fucntions.
+ */
+
 
 void OnMouseEvaluateDisprity(int event, int x, int y, int flags, void *param)
 {
