@@ -105,5 +105,8 @@
     <ClCompile Include="PatchMatchOnTriangles.cpp">
       <Filter>LocalMethods</Filter>
     </ClCompile>
+    <ClCompile Include="BP.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

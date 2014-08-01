@@ -6,70 +6,30 @@
 #include "Timer.h"
 #include "SlantedPlane.h"
 
-#define PATCHRADIUS				17
-#define PATCHWIDTH				35
-#define GRANULARITY				0.25
+
 #define SIMILARITYGAMMA			10
 #define MAXPATCHMATCHITERS		2
 
-static enum CostAggregationType { REGULAR_GRID, TOP50 };
-static enum MatchingCostType	{ ADGRADIENT, ADCENSUS };
+extern int					PATCHRADIUS;
+extern int					PATCHWIDTH;
+extern float				GRANULARITY;
 
-static CostAggregationType	gCostAggregationType	= TOP50;
-static MatchingCostType		gMatchingCostType		= ADCENSUS;
+extern enum CostAggregationType { REGULAR_GRID, TOP50 };
+extern enum MatchingCostType	{ ADGRADIENT, ADCENSUS };
 
-static MCImg<float>			gDsiL;
-static MCImg<float>			gDsiR;
-static MCImg<float>			gSimWeightsL;
-static MCImg<float>			gSimWeightsR;
-static MCImg<SimVector>		gSimVecsL;
-static MCImg<SimVector>		gSimVecsR;
+extern CostAggregationType	gCostAggregationType;
+extern MatchingCostType		gMatchingCostType;
+
+extern MCImg<float>			gDsiL;
+extern MCImg<float>			gDsiR;
+extern MCImg<float>			gSimWeightsL;
+extern MCImg<float>			gSimWeightsR;
+extern MCImg<SimVector>		gSimVecsL;
+extern MCImg<SimVector>		gSimVecsR;
 
 
 
-static bool InBound(int y, int x, int numRows, int numCols)
-{
-	return 0 <= y && y < numRows && 0 <= x && x < numCols;
-}
 
-static float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int sign)
-{
-	MCImg<float> &dsi = (sign == -1 ? gDsiL : gDsiR);
-	MCImg<float> &simWeights = (sign == -1 ? gSimWeightsL : gSimWeightsR);
-	MCImg<SimVector> &simVecs = (sign == -1 ? gSimVecsL : gSimVecsR);
-
-	int numRows = dsi.h, numCols = dsi.w, maxDisp = dsi.n - 1;
-	const int STRIDE = 1;
-	float totalCost = 0.f;
-
-	if (gCostAggregationType == REGULAR_GRID) {
-		MCImg<float> w(PATCHWIDTH, PATCHWIDTH, 1, simWeights.line(yc * numCols + xc));
-		for (int y = yc - PATCHRADIUS, id = 0; y <= yc + PATCHRADIUS; y += STRIDE) {
-			for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE, id++) {
-				if (InBound(y, x, numRows, numCols)) {
-					id = (y - (yc - PATCHRADIUS)) * PATCHWIDTH + (x - (xc - PATCHRADIUS));
-					float d = slantedPlane.ToDisparity(y, x);
-					int level = 0.5 + d / GRANULARITY;
-					level = std::max(0, std::min(maxDisp, level));
-					totalCost += w.data[id] * dsi.get(y, x)[level];
-				}
-			}
-		}
-	}
-	else if (gCostAggregationType == TOP50) {
-		SimVector &simVec = simVecs[yc][xc];
-		for (int i = 0; i < SIMVECTORSIZE; i++) {
-			int y = simVec.pos[i].y;
-			int x = simVec.pos[i].x;
-			float d = slantedPlane.ToDisparity(y, x);
-			int level = 0.5 + d / GRANULARITY;
-			level = std::max(0, std::min(maxDisp, level));
-			totalCost += simVec.w[i] * dsi.get(y, x)[level];
-		}
-	}
-
-	return totalCost;
-}
 
 static void ImproveGuess(int y, int x, SlantedPlane &oldGuess, SlantedPlane &newGuess, float &bestCost, int sign)
 {
@@ -258,12 +218,13 @@ static void WeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixel
 {
 	cv::Mat dispOut = disp.clone();
 	int numRows = disp.rows, numCols = disp.cols;
+	float *w = new float[PATCHWIDTH * PATCHWIDTH];
 
 	#pragma omp parallel for
 	for (int yc = 0; yc < numRows; yc++) {
 		for (int xc = 0; xc < numCols; xc++) {
 			if (!validPixelMap.at<unsigned char>(yc, xc)) {
-				float w[PATCHWIDTH * PATCHWIDTH] = { 0 };
+				memset(w, 0, PATCHWIDTH * PATCHWIDTH * sizeof(float));
 				cv::Vec3b &center = guideImg.at<cv::Vec3b>(yc, xc);
 				for (int y = yc - PATCHRADIUS, id = 0; y <= yc + PATCHRADIUS; y++) {
 					for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x++, id++) {
@@ -277,7 +238,8 @@ static void WeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixel
 			}
 		}
 	}
-
+	
+	delete[] w;
 	dispOut.copyTo(disp);
 }
 
@@ -385,3 +347,11 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 	EvaluateDisparity(rootFolder, dispL, 0.5f);
 }
 
+void TestPatchMatchOnPixels()
+{
+	cv::Mat imL = cv::imread("D:/data/stereo/teddy/im2.png");
+	cv::Mat imR = cv::imread("D:/data/stereo/teddy/im6.png");
+	cv::Mat dispL, dispR;
+
+	RunPatchMatchOnPixels("teddy", imL, imR, dispL, dispR);
+}

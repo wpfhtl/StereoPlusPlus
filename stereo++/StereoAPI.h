@@ -1,5 +1,6 @@
 #include <opencv2/core/core.hpp>
 #include "MCImg.h"
+#include "SlantedPlane.h"
 
 #define SIMVECTORSIZE	50
 
@@ -8,6 +9,8 @@ struct SimVector
 	cv::Point2i pos[SIMVECTORSIZE];
 	float w[SIMVECTORSIZE];
 };
+
+bool InBound(int y, int x, int numRows, int numCols);
 
 cv::Mat ComputeCensusImage(cv::Mat &img);
 
@@ -44,3 +47,5 @@ void SelfSimilarityPropagation(cv::Mat &img, cv::vector<SimVector> &simVecs);
 void Triangulate2DImage(cv::Mat& img, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds);
 
 cv::Mat DrawTriangleImage(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds);
+
+float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int sign);

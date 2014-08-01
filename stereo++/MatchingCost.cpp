@@ -3,6 +3,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include "MCImg.h"
+#include "SlantedPlane.h"
 #include "StereoAPI.h"
 
 #ifdef _DEBUG
@@ -33,6 +34,29 @@
 
 
 
+int		PATCHRADIUS		= 17;
+int		PATCHWIDTH		= 35;
+float	GRANULARITY		= 0.25f;
+
+enum CostAggregationType	{ REGULAR_GRID, TOP50 };
+enum MatchingCostType		{ ADGRADIENT, ADCENSUS };
+
+CostAggregationType		gCostAggregationType	= REGULAR_GRID;
+MatchingCostType		gMatchingCostType		= ADCENSUS;
+
+MCImg<float>			gDsiL;
+MCImg<float>			gDsiR;
+MCImg<float>			gSimWeightsL;
+MCImg<float>			gSimWeightsR;
+MCImg<SimVector>		gSimVecsL;
+MCImg<SimVector>		gSimVecsR;
+
+
+
+bool InBound(int y, int x, int numRows, int numCols)
+{
+	return 0 <= y && y < numRows && 0 <= x && x < numCols;
+}
 
 cv::Mat ComputeCensusImage(cv::Mat &img)
 {
@@ -269,5 +293,44 @@ cv::Mat WinnerTakesAll(MCImg<float> &dsi, float granularity)
 		}
 	}
 	return disp;
+}
+
+float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int sign)
+{
+	MCImg<float> &dsi = (sign == -1 ? gDsiL : gDsiR);
+	MCImg<float> &simWeights = (sign == -1 ? gSimWeightsL : gSimWeightsR);
+	MCImg<SimVector> &simVecs = (sign == -1 ? gSimVecsL : gSimVecsR);
+
+	int numRows = dsi.h, numCols = dsi.w, maxLevel = dsi.n - 1;
+	const int STRIDE = 1;
+	float totalCost = 0.f;
+
+	if (gCostAggregationType == REGULAR_GRID) {
+		MCImg<float> w(PATCHWIDTH, PATCHWIDTH, 1, simWeights.line(yc * numCols + xc));
+		for (int y = yc - PATCHRADIUS, id = 0; y <= yc + PATCHRADIUS; y += STRIDE) {
+			for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE, id++) {
+				if (InBound(y, x, numRows, numCols)) {
+					id = (y - (yc - PATCHRADIUS)) * PATCHWIDTH + (x - (xc - PATCHRADIUS));
+					float d = slantedPlane.ToDisparity(y, x);
+					int level = 0.5 + d / GRANULARITY;
+					level = std::max(0, std::min(maxLevel, level));
+					totalCost += w.data[id] * dsi.get(y, x)[level];
+				}
+			}
+		}
+	}
+	else if (gCostAggregationType == TOP50) {
+		SimVector &simVec = simVecs[yc][xc];
+		for (int i = 0; i < SIMVECTORSIZE; i++) {
+			int y = simVec.pos[i].y;
+			int x = simVec.pos[i].x;
+			float d = slantedPlane.ToDisparity(y, x);
+			int level = 0.5 + d / GRANULARITY;
+			level = std::max(0, std::min(maxLevel, level));
+			totalCost += simVec.w[i] * dsi.get(y, x)[level];
+		}
+	}
+
+	return totalCost;
 }
 
