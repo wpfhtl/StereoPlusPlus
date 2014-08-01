@@ -1,0 +1,109 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="utils">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="LocalMethods">
+      <UniqueIdentifier>{99227c08-59db-472a-aa91-f170a82e1e97}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Evaluation">
+      <UniqueIdentifier>{fc0d7f9d-1cca-4528-ad18-a99d91525582}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SLIC">
+      <UniqueIdentifier>{b79bee18-b90f-4da5-9d56-3fae57a4a20f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="poly2tri">
+      <UniqueIdentifier>{c327f787-526a-4df9-8492-62b20229f255}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="MCImg.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="StereoAPI.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="Timer.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="SlantedPlane.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="SLIC\SLIC.h">
+      <Filter>SLIC</Filter>
+    </ClInclude>
+    <ClInclude Include="poly2tri\poly2tri.h">
+      <Filter>poly2tri</Filter>
+    </ClInclude>
+    <ClInclude Include="poly2tri\sweep\advancing_front.h">
+      <Filter>poly2tri</Filter>
+    </ClInclude>
+    <ClInclude Include="poly2tri\sweep\cdt.h">
+      <Filter>poly2tri</Filter>
+    </ClInclude>
+    <ClInclude Include="poly2tri\sweep\sweep.h">
+      <Filter>poly2tri</Filter>
+    </ClInclude>
+    <ClInclude Include="poly2tri\sweep\sweep_context.h">
+      <Filter>poly2tri</Filter>
+    </ClInclude>
+    <ClInclude Include="poly2tri\common\shapes.h">
+      <Filter>poly2tri</Filter>
+    </ClInclude>
+    <ClInclude Include="poly2tri\common\utils.h">
+      <Filter>poly2tri</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="MatchingCost.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="Evaluation.cpp">
+      <Filter>Evaluation</Filter>
+    </ClCompile>
+    <ClCompile Include="MouseCallbacks.cpp">
+      <Filter>Evaluation</Filter>
+    </ClCompile>
+    <ClCompile Include="PatchMatchOnPixels.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="Timer.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="Ply.cpp">
+      <Filter>Evaluation</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="SelfSimilarityPropagation.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="SLIC\SLIC.cpp">
+      <Filter>SLIC</Filter>
+    </ClCompile>
+    <ClCompile Include="poly2tri\sweep\advancing_front.cc">
+      <Filter>poly2tri</Filter>
+    </ClCompile>
+    <ClCompile Include="poly2tri\sweep\cdt.cc">
+      <Filter>poly2tri</Filter>
+    </ClCompile>
+    <ClCompile Include="poly2tri\sweep\sweep.cc">
+      <Filter>poly2tri</Filter>
+    </ClCompile>
+    <ClCompile Include="poly2tri\sweep\sweep_context.cc">
+      <Filter>poly2tri</Filter>
+    </ClCompile>
+    <ClCompile Include="poly2tri\common\shapes.cc">
+      <Filter>poly2tri</Filter>
+    </ClCompile>
+    <ClCompile Include="Triangulate2D.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="PatchMatchOnTriangles.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
