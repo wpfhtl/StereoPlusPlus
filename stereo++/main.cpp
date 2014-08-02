@@ -13,8 +13,11 @@ int main()
 	/*void TestTriangulation2D();
 	TestTriangulation2D();*/
 
-	void TestPatchMatchOnTriangles();
-	TestPatchMatchOnTriangles();
+	/*void TestPatchMatchOnTriangles();
+	TestPatchMatchOnTriangles();*/
+
+	void TestLBPOnGridGraph();
+	TestLBPOnGridGraph();
 
 	return 0;
 }

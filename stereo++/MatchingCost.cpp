@@ -36,13 +36,13 @@
 
 int		PATCHRADIUS		= 17;
 int		PATCHWIDTH		= 35;
-float	GRANULARITY		= 0.25f;
+float	GRANULARITY		= 1.f;
 
 enum CostAggregationType	{ REGULAR_GRID, TOP50 };
 enum MatchingCostType		{ ADGRADIENT, ADCENSUS };
 
 CostAggregationType		gCostAggregationType	= REGULAR_GRID;
-MatchingCostType		gMatchingCostType		= ADCENSUS;
+MatchingCostType		gMatchingCostType		= ADGRADIENT;
 
 MCImg<float>			gDsiL;
 MCImg<float>			gDsiR;
@@ -56,6 +56,11 @@ MCImg<SimVector>		gSimVecsR;
 bool InBound(int y, int x, int numRows, int numCols)
 {
 	return 0 <= y && y < numRows && 0 <= x && x < numCols;
+}
+
+bool InBound(cv::Point &p, int numRows, int numCols)
+{
+	return 0 <= p.y && p.y < numRows && 0 <= p.x && p.x < numCols;
 }
 
 cv::Mat ComputeCensusImage(cv::Mat &img)
@@ -297,13 +302,14 @@ cv::Mat WinnerTakesAll(MCImg<float> &dsi, float granularity)
 
 float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int sign)
 {
-	MCImg<float> &dsi = (sign == -1 ? gDsiL : gDsiR);
-	MCImg<float> &simWeights = (sign == -1 ? gSimWeightsL : gSimWeightsR);
-	MCImg<SimVector> &simVecs = (sign == -1 ? gSimVecsL : gSimVecsR);
+	MCImg<float> &dsi			= (sign == -1 ? gDsiL : gDsiR);
+	MCImg<float> &simWeights	= (sign == -1 ? gSimWeightsL : gSimWeightsR);
+	MCImg<SimVector> &simVecs	= (sign == -1 ? gSimVecsL : gSimVecsR);
 
 	int numRows = dsi.h, numCols = dsi.w, maxLevel = dsi.n - 1;
 	const int STRIDE = 1;
 	float totalCost = 0.f;
+	int numPixelsInBound = 0;
 
 	if (gCostAggregationType == REGULAR_GRID) {
 		MCImg<float> w(PATCHWIDTH, PATCHWIDTH, 1, simWeights.line(yc * numCols + xc));
@@ -315,6 +321,7 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 					int level = 0.5 + d / GRANULARITY;
 					level = std::max(0, std::min(maxLevel, level));
 					totalCost += w.data[id] * dsi.get(y, x)[level];
+					numPixelsInBound++;
 				}
 			}
 		}
@@ -329,8 +336,10 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 			level = std::max(0, std::min(maxLevel, level));
 			totalCost += simVec.w[i] * dsi.get(y, x)[level];
 		}
+		numPixelsInBound = SIMVECTORSIZE;
 	}
 
+	//return totalCost / numPixelsInBound;
 	return totalCost;
 }
 

@@ -12,6 +12,8 @@ struct SimVector
 
 bool InBound(int y, int x, int numRows, int numCols);
 
+bool InBound(cv::Point &p, int numRows, int numCols);
+
 cv::Mat ComputeCensusImage(cv::Mat &img);
 
 cv::Mat ComputeGradientImage(cv::Mat &img);
