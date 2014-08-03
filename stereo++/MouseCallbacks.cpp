@@ -4,29 +4,38 @@
 
 #include "StereoAPI.h"
 
+
+
+#define ASSERT(condition)								\
+	if (!(condition)) {									\
+		printf("ASSERT %s VIOLATED AT LINE %d, %s\n",	\
+			#condition, __LINE__, __FILE__);			\
+		exit(-1);										\
+	}
+
+
 /* Note: each OnMouse callback function should take a fixed list of parameters.
  * It is the caller's responsibility to prepare different parameter lists for
  * different OnMouse fucntions.
  */
 
-
-void OnMouseEvaluateDisprity(int event, int x, int y, int flags, void *param)
+void OnMouseEvaluateDisparityDefaultDrawing(int event, int x, int y, int flags, void *param, cv::Mat &tmp)
 {
-	cv::Mat &canvas	= *(cv::Mat*)((void**)param)[0];
+	//cv::Mat &canvas = *(cv::Mat*)((void**)param)[0];
 	cv::Mat &dispL	= *(cv::Mat*)((void**)param)[1];
 	cv::Mat &GT		= *(cv::Mat*)((void**)param)[2];
 	cv::Mat &imL	= *(cv::Mat*)((void**)param)[3];
 	cv::Mat &imR	= *(cv::Mat*)((void**)param)[4];
 
-	float badOnNonocc	= *(float*)((void**)param)[5];
-	float badOnAll		= *(float*)((void**)param)[6];
-	float badOnDisc		= *(float*)((void**)param)[7];
+	float badRateOnNonocc	= *(float*)((void**)param)[5];
+	float badRateOnAll		= *(float*)((void**)param)[6];
+	float badRateOnDisc		= *(float*)((void**)param)[7];
 
-	int numDisps		= *(int*)((void**)param)[8];
-	int visualizeScale	= *(int*)((void**)param)[9];
-	int maxDisp			= numDisps - 1;
+	int numDisps			= *(int*)((void**)param)[8];
+	int visualizeScale		= *(int*)((void**)param)[9];
+	int maxDisp				= numDisps - 1;
 
-	std::string workingDir = *(std::string*)((void**)param)[10];
+	std::string workingDir	= *(std::string*)((void**)param)[10];
 
 
 	int numRows = GT.rows, numCols = GT.cols;
@@ -34,7 +43,7 @@ void OnMouseEvaluateDisprity(int event, int x, int y, int flags, void *param)
 	int originY = y;
 	x %= numCols;
 	y %= numRows;
-	cv::Mat tmp = canvas.clone();
+	//cv::Mat tmp = canvas.clone();
 
 	if (event == CV_EVENT_MOUSEMOVE)
 	{
@@ -48,7 +57,7 @@ void OnMouseEvaluateDisprity(int event, int x, int y, int flags, void *param)
 
 		float dGT = GT.at<float>(y, x);
 		float dMY = dispL.at<float>(y, x);
-		char text[1024]; 
+		char text[1024];
 		sprintf(text, "(%d, %d)  GT: %.2f  MINE: %.2f", y, x, dGT, dMY);
 		cv::putText(tmp, std::string(text), cv::Point2d(20, 50), 0, 0.6, cv::Scalar(0, 0, 255, 1), 2);
 
@@ -60,7 +69,7 @@ void OnMouseEvaluateDisprity(int event, int x, int y, int flags, void *param)
 	if (event == CV_EVENT_RBUTTONDOWN)
 	{
 		char text[1024];
-		sprintf(text, "BadPixelRate  %.2f%%  %.2f%%  %.2f%%", 100.f * badOnNonocc, 100.f * badOnAll, 100.f * badOnDisc);
+		sprintf(text, "BadPixelRate  %.2f%%  %.2f%%  %.2f%%", 100.f * badRateOnNonocc, 100.f * badRateOnAll, 100.f * badRateOnDisc);
 		cv::putText(tmp, std::string(text), cv::Point2d(20, 50), 0, 0.6, cv::Scalar(0, 0, 255, 1), 2);
 	}
 
@@ -73,8 +82,90 @@ void OnMouseEvaluateDisprity(int event, int x, int y, int flags, void *param)
 		SaveDisparityToPly(dispL, imL, maxDisp, workingDir, plyFilePath);
 		system(cmdInvokeMeshlab.c_str());
 	}
+}
 
-	cv::imshow("OnMouseEvaluateDisprity", tmp);
+void OnMouseEvaluateDisparity(int event, int x, int y, int flags, void *param)
+{
+	/*void *callbackParams[] = {
+		&auxParams,
+		&canvas, &dispL, &GT, &imL, &imR,
+		&badRateOnNonocc, &badRateOnAll, &badRateOnDisc,
+		&numDisps, &visualizeScale, &workingDir
+	};*/
+	cv::Mat &canvas = *(cv::Mat*)((void**)param)[1];
+	cv::Mat tmp = canvas.clone();
+	OnMouseEvaluateDisparityDefaultDrawing(event, x, y, flags, (void*)((void**)param + 1), tmp);
+	cv::imshow("OnMouseEvaluateDisparity", tmp);
+}
+
+void OnMousePatchMatchOnPixels(int event, int x, int y, int flags, void *param)
+{
+	cv::Mat tmpCanvas = (*(cv::Mat*)((void**)param)[1]).clone();
+	OnMouseEvaluateDisparityDefaultDrawing(event, x, y, flags, (void*)((void**)param + 1), tmpCanvas);
+
+	if (event == CV_EVENT_LBUTTONDOWN) {
+		std::vector<std::pair<std::string, void*>> &auxParams
+			= *(std::vector<std::pair<std::string, void*>>*)((void**)param)[0];
+
+		ASSERT(auxParams[0].first == "slantedPlanesL")
+		ASSERT(auxParams[1].first == "bestCostsL")
+		MCImg<SlantedPlane> &slantedPlanesL = *(MCImg<SlantedPlane>*)auxParams[0].second;
+		cv::Mat &bestCostsL					= *(cv::Mat*)auxParams[1].second;
+
+		int numRows = bestCostsL.rows, numCols = bestCostsL.cols;
+		y %= numRows;
+		x %= numCols;
+		SlantedPlane &sp = slantedPlanesL[y][x];
+
+		/*printf("( a,  b,  c) = (% 11.6f, % 11.6f, % 11.6f)\n", sp.a,  sp.b,  sp.c);
+		printf("(nx, ny, nz) = (% 11.6f, % 11.6f, % 11.6f)\n", sp.nx, sp.ny, sp.nz);
+		printf("bestCost(%3d, %3d) = %f\n\n", y, x, bestCostsL.at<float>(y, x));*/
+
+		char textBuf[1024];
+		sprintf(textBuf, "( a,  b,  c) = (% 11.6f, % 11.6f, % 11.6f)", sp.a, sp.b, sp.c);
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2d(20, 50),  CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+		sprintf(textBuf, "(nx, ny, nz) = (% 11.6f, % 11.6f, % 11.6f)", sp.nx, sp.ny, sp.nz);
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2d(20, 80),  CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+		sprintf(textBuf, "bestCost(%3d, %3d) = %f", y, x, bestCostsL.at<float>(y, x));
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2d(20, 110), CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+	}
+	
+	cv::imshow("OnMousePatchMatchOnPixels", tmpCanvas);
+}
+
+void OnMouseLoopyBPOnGridGraph(int event, int x, int y, int flags, void *param)
+{
+	cv::Mat tmpCanvas = (*(cv::Mat*)((void**)param)[1]).clone();
+	OnMouseEvaluateDisparityDefaultDrawing(event, x, y, flags, (void*)((void**)param + 1), tmpCanvas);
+
+	if (event == CV_EVENT_LBUTTONDOWN) {
+		std::vector<std::pair<std::string, void*>> &auxParams
+			= *(std::vector<std::pair<std::string, void*>>*)((void**)param)[0];
+
+		ASSERT(auxParams[0].first == "allMessages")
+		ASSERT(auxParams[1].first == "allBeliefs")
+		ASSERT(auxParams[2].first == "unaryCost")
+		MCImg<float> &allMessages = *(MCImg<float>*)auxParams[0].second;
+		MCImg<float> &allBeliefs  = *(MCImg<float>*)auxParams[1].second;
+		MCImg<float> &unaryCost   = *(MCImg<float>*)auxParams[2].second;
+
+		int numRows = allBeliefs.h, numCols = allBeliefs.w, numDisps = allBeliefs.n;
+		y %= numRows; x %= numCols;
+		
+		printf("\n\n(y, x) = (%d, %d)\n", y, x);
+		printf("===================== Beliefs | unaryCost | Messages =====================\n");
+		for (int d = 0; d < numDisps; d++) {
+			printf("% 10.6f | % 10.6f   %2d  "
+				   "% 10.6f   % 10.6f   %2d  % 10.6f   % 10.6f\n", 
+				   allBeliefs.get(y, x)[d], unaryCost.get(y, x)[d], d,
+				   allMessages.get(y, x)[d + 0 * numDisps],
+				   allMessages.get(y, x)[d + 1 * numDisps], d,
+				   allMessages.get(y, x)[d + 2 * numDisps],
+				   allMessages.get(y, x)[d + 3 * numDisps]);
+		}
+	}
+
+	cv::imshow("OnMouseLoopyBPOnGridGraph", tmpCanvas);
 }
 
 void OnMouseTestSelfSimilarityPropagation(int event, int x, int y, int flags, void *param)

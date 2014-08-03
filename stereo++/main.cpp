@@ -7,8 +7,8 @@
 
 int main()
 {
-	/*void TestPatchMatchOnPixels();
-	TestPatchMatchOnPixels();*/
+	//void TestPatchMatchOnPixels();
+	//TestPatchMatchOnPixels();
 
 	/*void TestTriangulation2D();
 	TestTriangulation2D();*/

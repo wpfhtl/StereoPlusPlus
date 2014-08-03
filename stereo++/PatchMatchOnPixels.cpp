@@ -325,7 +325,11 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 
 		dispL = SlantedPlaneMapToDisparityMap(slantedPlanesL);
 		dispR = SlantedPlaneMapToDisparityMap(slantedPlanesR);
-		EvaluateDisparity(rootFolder, dispL, 0.5f);
+
+		std::vector<std::pair<std::string, void*>> auxParams;
+		auxParams.push_back(std::pair<std::string, void*>("slantedPlanesL", &slantedPlanesL));
+		auxParams.push_back(std::pair<std::string, void*>("bestCostsL",     &bestCostsL));
+		EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams, "OnMousePatchMatchOnPixels");
 	}
 
 

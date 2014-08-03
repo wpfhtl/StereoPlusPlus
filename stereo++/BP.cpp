@@ -8,7 +8,7 @@
 
 #define		SIMILARITYGAMMA		10
 #define		PAIRWISECUTOFF		5
-#define		LAMBDA				0.1f
+#define		LAMBDA				0.002f
 
 extern int					PATCHRADIUS;
 extern int					PATCHWIDTH;
@@ -41,38 +41,45 @@ static inline float *GetMessage(cv::Point2i &s, cv::Point2i &t, MCImg<float> &al
 	cv::Point2i delta = t - s;
 	for (int k = 0; k < 4; k++) {
 		if (delta == dirDelta[k]) {
-			return allMessages.get(s.y, s.x) + k * numDisps;
+			return allMessages.get(t.y, t.x) + k * numDisps;
 		}
 	}
 	printf("Bug: You should never reach here!\n");
-	return allMessages.get(s.y, s.x);
+	return allMessages.get(t.y, t.x);
 }
 
-static void UpdateBPMessage(cv::Point2i &s, cv::Point2i &t, MCImg<float> &allMessages, MCImg<float> &unaryCost)
+static void UpdateBPMessage(cv::Point2i &s, cv::Point2i &t, MCImg<float> &oldMessages, MCImg<float> &newMessages, MCImg<float> &unaryCost)
 {
 	int  numRows = unaryCost.h, numCols = unaryCost.w, numDisps = unaryCost.n;
 	if (!InBound(s, numRows, numCols) || !InBound(t, numRows, numCols)) {
 		return;
 	}
 
-	float *s2tMsg = GetMessage(s, t, allMessages, numDisps);
+	float *s2tMsgNew = GetMessage(s, t, newMessages, numDisps);
 
+	float minMsgVal = FLT_MAX;
 	for (int xt = 0; xt < numDisps; xt++) {	
-		float bestCost = FLT_MAX;
 
+		float bestCost = FLT_MAX;
 		for (int xs = 0; xs < numDisps; xs++) {
 			float tmpCost = unaryCost.get(s.y, s.x)[xs] + PairwiseCost(xs, xt);
 			for (int k = 0; k < 4; k++) {
 				cv::Point2i q = s + dirDelta[k];
 				if (InBound(q, numRows, numCols) && q != t) {
-					tmpCost += GetMessage(q, s, allMessages, numDisps)[xs];
+					tmpCost += GetMessage(q, s, oldMessages, numDisps)[xs];
 				}
 			}
 			bestCost = std::min(bestCost, tmpCost);
 		}
 
-		//s2tMsg[xt] = bestCost;
-		s2tMsg[xt] = 0.7 * s2tMsg[xt] + 0.3 * bestCost;
+		s2tMsgNew[xt] = bestCost;
+		//s2tMsg[xt] = 0.7 * s2tMsg[xt] + 0.3 * bestCost;
+		minMsgVal = std::min(minMsgVal, bestCost);
+	}
+
+	// Normalize messages
+	for (int xt = 0; xt < numDisps; xt++) {
+		s2tMsgNew[xt] -= minMsgVal;
 	}
 }
 
@@ -92,7 +99,7 @@ static float UpdateBelief(cv::Point2i &t, MCImg<float> &allBeliefs, MCImg<float>
 
 	float *belief = allBeliefs.get(t.y, t.x);
 	for (int xt = 0; xt < numDisps; xt++) {
-		float newBelief = unaryCost.get(t.y, t.y)[xt];
+		float newBelief = unaryCost.get(t.y, t.x)[xt];
 		for (int k = 0; k < 4; k++) {
 			if (s2tMsgs[k]) {
 				newBelief += s2tMsgs[k][xt];
@@ -134,11 +141,13 @@ static cv::Mat RunLoopyBPOnGrideGraph(std::string rootFolder, MCImg<float> &unar
 		}
 	}
 	
-	MCImg<float> allMessages(numRows, numCols, 4 * numDisps);
+	MCImg<float> oldMessages(numRows, numCols, 4 * numDisps);
+	MCImg<float> newMessages(numRows, numCols, 4 * numDisps);
 	MCImg<float> allBeliefs(numRows, numCols, numDisps);
 
 	// Step 1 - Initialize messages
-	memset(allMessages.data, 0, 4 * numRows * numCols * sizeof(float));
+	memset(oldMessages.data, 0, 4 * numRows * numCols * numDisps * sizeof(float));
+	memset(newMessages.data, 0, 4 * numRows * numCols * numDisps * sizeof(float));
 	for (int i = 0; i < numRows * numCols * numDisps; i++) {
 		allBeliefs.data[i] = 1.f / numDisps;
 	}
@@ -146,16 +155,19 @@ static cv::Mat RunLoopyBPOnGrideGraph(std::string rootFolder, MCImg<float> &unar
 	// Step 2 - Update messages
 	float maxBeliefDiff = FLT_MAX;
 	const int maxBPRound = 100;
-	for (int round = 0; round < maxBPRound && maxBeliefDiff > 1e-4; round++) {
+	for (int round = 0; round < maxBPRound && maxBeliefDiff > 1e-2; round++) {
 
 		if (round % 1 == 0) {
 			cv::Mat dispMap = DecodeDisparityFromBeliefs(allBeliefs);
-			EvaluateDisparity(rootFolder, dispMap);
+			std::vector<std::pair<std::string, void*>> auxParams;
+			auxParams.push_back(std::pair<std::string, void*>("allMessages", &oldMessages));
+			auxParams.push_back(std::pair<std::string, void*>("allBeliefs",  &allBeliefs));
+			auxParams.push_back(std::pair<std::string, void*>("unaryCost",   &unaryCost));
+			EvaluateDisparity(rootFolder, dispMap, 1.f, auxParams, "OnMouseLoopyBPOnGridGraph");
 		}
 
 		printf("Doing round %d ...\n", round);
 		std::random_shuffle(pixelList.begin(), pixelList.end());
-		//printf("sfsdfsdf\n");
 		printf("pixelList.size() = %d\n", pixelList.size());
 		printf("numDisps = %d\n", numDisps);
 		int numPixels = pixelList.size();
@@ -163,25 +175,26 @@ static cv::Mat RunLoopyBPOnGrideGraph(std::string rootFolder, MCImg<float> &unar
 		// update messages
 		#pragma omp parallel for
 		for (int i = 0; i < numPixels; i++) {
-			if (i % 200 == 0) {
-				printf("i = %d\n", i);
+			if (i % 1000 == 0) {
+				//printf("i = %d\n", i);
 			}
 
 			cv::Point2i s = pixelList[i];
 			for (int k = 0; k < 4; k++) {
 				cv::Point2i t = s + dirDelta[k];
-				UpdateBPMessage(s, t, allMessages, unaryCost);
+				UpdateBPMessage(s, t, oldMessages, newMessages, unaryCost);
 			}
 		}
+		memcpy(oldMessages.data, newMessages.data, 4 * numRows * numCols * numDisps * sizeof(float));
 
-		printf("sdfsdf\n");
 		// update beliefs
 		maxBeliefDiff = -1;
 		for (int i = 0; i < pixelList.size(); i++) {
 			cv::Point2i t = pixelList[i];
-			float maxDiff = UpdateBelief(t, allBeliefs, allMessages, unaryCost);
+			float maxDiff = UpdateBelief(t, allBeliefs, oldMessages, unaryCost);
 			maxBeliefDiff = std::max(maxBeliefDiff, maxDiff);
 		}
+		printf("maxBeliefDiff = %f\n", maxBeliefDiff);
 	}
 
 
@@ -228,6 +241,9 @@ void RunLoopyBP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	}
 
 	MCImg<float> unaryCost(numRows, numCols, numDisps);
+#if 1
+	memcpy(unaryCost.data, gDsiL.data, numRows * numCols * numDisps * sizeof(float));
+#else
 	#pragma omp parallel for
 	for (int y = 0; y < numRows; y++) {
 		for (int x = 0; x < numCols; x++) {
@@ -237,20 +253,7 @@ void RunLoopyBP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 			}
 		}
 	}
-
-	for (int retry = 0; retry < 100; retry++) {
-		if (retry % 10 == 0) {
-			printf("\n");
-		}
-		int id = rand() % (numRows * numCols * numDisps);
-		printf("%3.4f   ", unaryCost.data[id]);
-	}
-
-	double total = 0;
-	for (int i = 0; i < numRows * numCols * numDisps; i++) {
-		total += unaryCost.data[i];
-	}
-	printf("\n\nAverage Cost: %lf\n", total / (numRows * numCols * numDisps));
+#endif
 
 	cv::Mat dispL = RunLoopyBPOnGrideGraph(rootFolder, unaryCost);
 	//cv::Mat dispL = WinnerTakesAll(unaryCost, GRANULARITY);

@@ -38,7 +38,8 @@ void SaveDisparityToPly(cv::Mat &disp, cv::Mat& img, float maxDisp,
 void SetupStereoParameters(std::string rootFolder, int &numDisps, int &maxDisp, int &visualizeScale);
 
 void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f,
-	std::vector<std::pair<std::string, void*>> auxParams = std::vector<std::pair<std::string, void*>>());
+	std::vector<std::pair<std::string, void*>> auxParams = std::vector<std::pair<std::string, void*>>(),
+	std::string mouseCallbackName = "OnMouseEvaluateDisparity");
 
 void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR);
 

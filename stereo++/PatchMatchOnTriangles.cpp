@@ -377,6 +377,7 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 		cv::Mat dispL = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanesL, triPixelListsL);
 		std::vector<std::pair<std::string, void*>> auxParams;
 		auxParams.push_back(std::pair<std::string, void*>("triImg", &triImgL));
+		//auxParams.push_back(std::pair<std::string, void*>("slantedPlanesL", &slantedPlanesL));
 		EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
 
 		std::reverse(idListL.begin(), idListL.end());

@@ -3,6 +3,15 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 
+#define ASSERT(condition)								\
+	if (!(condition)) {									\
+		printf("ASSERT %s VIOLATED AT LINE %d, %s\n",	\
+			#condition, __LINE__, __FILE__);			\
+		exit(-1);										\
+	} 
+
+
+
 
 void SetupStereoParameters(std::string rootFolder, int &numDisps, int &maxDisp, int &visualizeScale)
 {
@@ -18,7 +27,7 @@ void SetupStereoParameters(std::string rootFolder, int &numDisps, int &maxDisp, 
 		numDisps = 60;
 		visualizeScale = 4;
 	}
-	else if (rootFolder == "face" || rootFolder == "face1") {
+	else if (rootFolder == "face"  || rootFolder == "face1") {
 		numDisps = 80;
 		visualizeScale = 3;
 	}
@@ -29,9 +38,33 @@ void SetupStereoParameters(std::string rootFolder, int &numDisps, int &maxDisp, 
 	maxDisp = numDisps - 1;
 }
 
+void RegisterMouseCallbacks(std::string mouseCallbackName, void *callbackParams)
+{
+	if (mouseCallbackName == "OnMouseEvaluateDisparity") {
+		void OnMouseEvaluateDisparity(int event, int x, int y, int flags, void *param);
+		cv::setMouseCallback(mouseCallbackName, OnMouseEvaluateDisparity, callbackParams);
+		return;
+	}
+	if (mouseCallbackName == "OnMousePatchMatchOnPixels") {
+		void OnMousePatchMatchOnPixels(int event, int x, int y, int flags, void *param);
+		cv::setMouseCallback(mouseCallbackName, OnMousePatchMatchOnPixels, callbackParams);
+		return;
+	}
+	//if (mouseCallbackName == "OnMousePatchMatchOnTriangles") {
+	//	cv::setMouseCallback(mouseCallbackName, OnMousePatchMatchOnTriangles, callbackParams);
+	//	return;
+	//}
+	if (mouseCallbackName == "OnMouseLoopyBPOnGridGraph") {
+		void OnMouseLoopyBPOnGridGraph(int event, int x, int y, int flags, void *param);
+		cv::setMouseCallback(mouseCallbackName, OnMouseLoopyBPOnGridGraph, callbackParams);
+		return;
+	}
+	ASSERT(0)
+}
 
 void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f, 
-	std::vector<std::pair<std::string, void*>> auxParams = std::vector<std::pair<std::string, void*>>())
+	std::vector<std::pair<std::string, void*>> auxParams = std::vector<std::pair<std::string, void*>>(),
+	std::string mouseCallbackName = "OnMouseEvaluateDisparity")
 {
 	// Step 1 - Load images, parepare parameters
 	std::string folderPrefix = "D:/data/stereo/";
@@ -104,16 +137,6 @@ void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f,
 
 	
 	// Step 3 - Prepare images for canvas
-	cv::Mat triImg, segImg;
-	for (int i = 0; i < auxParams.size(); i++) {
-		if (auxParams[i].first == "triImg") {
-			triImg = *(cv::Mat*)auxParams[i].second;
-		}
-		else if (auxParams[i].first == "segImg") {
-			segImg = *(cv::Mat*)auxParams[i].second;
-		}
-	}
-
 	cv::Mat canvas, topRow, bottomRow, gtImg, dispImg;
 	dispL.convertTo(dispImg, CV_8UC1, visualizeScale);
 	cv::cvtColor(dispImg, dispImg, CV_GRAY2BGR);
@@ -127,20 +150,22 @@ void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f,
 	cv::vconcat(topRow, bottomRow, canvas);
 
 	cv::Mat childWindowBL = canvas(cv::Rect(0, numRows, numCols, numRows));
-	if (!triImg.empty()) {
-		triImg.copyTo(childWindowBL);
-	}
-	else if (!segImg.empty()) {
-		segImg.copyTo(childWindowBL);
+	if (!auxParams.empty()) {
+		if (auxParams[0].first == "triImg" || auxParams[0].first == "segImg") {
+			(*(cv::Mat*)auxParams[0].second).copyTo(childWindowBL);
+			auxParams.erase(auxParams.begin());
+		}
 	}
 
-	void OnMouseEvaluateDisprity(int event, int x, int y, int flags, void *param);
+
+	// step 4 - Invoke mouse callbacks
 	void *callbackParams[] = { 
+		&auxParams,
 		&canvas, &dispL, &GT, &imL, &imR,
 		&badRateOnNonocc, &badRateOnAll, &badRateOnDisc, 
 		&numDisps, &visualizeScale, &workingDir
 	};
-	cv::imshow("OnMouseEvaluateDisprity", canvas);
-	cv::setMouseCallback("OnMouseEvaluateDisprity", OnMouseEvaluateDisprity, callbackParams);
+	cv::imshow(mouseCallbackName, canvas);
+	RegisterMouseCallbacks(mouseCallbackName, callbackParams);
 	cv::waitKey(0);
 }
