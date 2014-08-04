@@ -16,8 +16,11 @@ int main()
 	/*void TestPatchMatchOnTriangles();
 	TestPatchMatchOnTriangles();*/
 
-	void TestLBPOnGridGraph();
-	TestLBPOnGridGraph();
+	/*void TestLBPOnGridGraph();
+	TestLBPOnGridGraph();*/
+
+	void TestLBPOnFactorGraph();
+	TestLBPOnFactorGraph();
 
 	return 0;
 }

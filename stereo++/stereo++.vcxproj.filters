@@ -55,6 +55,9 @@
     <ClInclude Include="poly2tri\common\utils.h">
       <Filter>poly2tri</Filter>
     </ClInclude>
+    <ClInclude Include="BPOnFactorGraph.h">
+      <Filter>LocalMethods</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="MatchingCost.cpp">
@@ -106,6 +109,9 @@
       <Filter>LocalMethods</Filter>
     </ClCompile>
     <ClCompile Include="BP.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="BPOnFactorGraph.cpp">
       <Filter>LocalMethods</Filter>
     </ClCompile>
   </ItemGroup>

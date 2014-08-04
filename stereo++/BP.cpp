@@ -48,7 +48,7 @@ static inline float *GetMessage(cv::Point2i &s, cv::Point2i &t, MCImg<float> &al
 	return allMessages.get(t.y, t.x);
 }
 
-static void UpdateBPMessage(cv::Point2i &s, cv::Point2i &t, MCImg<float> &oldMessages, MCImg<float> &newMessages, MCImg<float> &unaryCost)
+static void UpdateMessage(cv::Point2i &s, cv::Point2i &t, MCImg<float> &oldMessages, MCImg<float> &newMessages, MCImg<float> &unaryCost)
 {
 	int  numRows = unaryCost.h, numCols = unaryCost.w, numDisps = unaryCost.n;
 	if (!InBound(s, numRows, numCols) || !InBound(t, numRows, numCols)) {
@@ -182,7 +182,7 @@ static cv::Mat RunLoopyBPOnGrideGraph(std::string rootFolder, MCImg<float> &unar
 			cv::Point2i s = pixelList[i];
 			for (int k = 0; k < 4; k++) {
 				cv::Point2i t = s + dirDelta[k];
-				UpdateBPMessage(s, t, oldMessages, newMessages, unaryCost);
+				UpdateMessage(s, t, oldMessages, newMessages, unaryCost);
 			}
 		}
 		memcpy(oldMessages.data, newMessages.data, 4 * numRows * numCols * numDisps * sizeof(float));

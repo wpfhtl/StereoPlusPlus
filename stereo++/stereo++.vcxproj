@@ -148,6 +148,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="BPOnFactorGraph.h" />
     <ClInclude Include="MCImg.h" />
     <ClInclude Include="poly2tri\common\shapes.h" />
     <ClInclude Include="poly2tri\common\utils.h" />
@@ -163,6 +164,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="BP.cpp" />
+    <ClCompile Include="BPOnFactorGraph.cpp" />
     <ClCompile Include="Evaluation.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MatchingCost.cpp" />
