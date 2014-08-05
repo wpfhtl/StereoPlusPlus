@@ -1,4 +1,4 @@
-#include <opencv2/core/core.hpp>
+ #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
@@ -14,16 +14,23 @@
 
 
 
+
+
 #define		PAIRWISECUTOFF		5
 #define		LAMBDA				0.001f
 
 #define		BOOL_SPLIT			1
 #define		BOOL_NOTSPLIT		0
 
-#define		TAU1				0.01
-#define		TAU2				0.1
-#define		TAU3				0.1
+//#define		TAU1				0.025
+//#define		TAU2				0.1
+//#define		TAU3				0.1
 
+static float TAU1;
+static float TAU2;
+static float TAU3;
+static float TANGENT_CUTOFF;
+static float TANGENT_LAMBDA;
 
 
 #define ASSERT(condition)								\
@@ -57,14 +64,14 @@ extern MCImg<SimVector>		gSimVecsR;
 
 
 
-void operator *=(Message &msg, float s)
+inline void operator *=(Message &msg, float s)
 {
 	for (int i = 0; i < msg.size(); i++) {
 		msg[i] *= s;
 	}
 }
 
-void operator +=(Message &a, Message &b)
+inline void operator +=(Message &a, Message &b)
 {
 	ASSERT(a.size() == b.size())
 	for (int i = 0; i < a.size(); i++) {
@@ -72,7 +79,7 @@ void operator +=(Message &a, Message &b)
 	}
 }
 
-void operator -=(Message &a, Message &b)
+inline void operator -=(Message &a, Message &b)
 {
 	ASSERT(a.size() == b.size())
 	for (int i = 0; i < a.size(); i++) {
@@ -83,88 +90,59 @@ void operator -=(Message &a, Message &b)
 
 
 
-static cv::Mat DecodeDisparityFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs)
+
+/////////////////////////////////////////////////////  BPOnFG  /////////////////////////////////////////////////////
+float BPOnFG::RunNextIteration()
 {
-	cv::Mat dispMap(numRows, numCols, CV_32FC1);
-	for (int y = 0, id = 0; y < numRows; y++) {
-		for (int x = 0; x < numCols; x++, id++) {
-			Probs &belief = allBeliefs[id];
-			dispMap.at<float>(y, x) = std::min_element(belief.begin(), belief.end()) - belief.begin();
+	int tic = clock();
+
+	// currently processing in sequential order, consider random shuffle later.
+	printf("Updating Messages msgNVarToFactor...\n");
+	#pragma omp parallel for
+	for (int i = 0; i < varNodes.size(); i++) {
+		for (int k = 0; k < varNodes[i].factorNbs.size(); k++) {
+			int alpha = varNodes[i].factorNbs[k];
+			//printf("updating N_%dto%d ...\n", i, alpha);
+			UpdateMessageNVarToFactor(i, alpha);
 		}
 	}
-	return dispMap;
-}
 
-void BP::Run(std::string rootFolder, std::vector<int> &outLabels, int maxIters, float tol)
-{
-	cv::Mat imL = cv::imread("D:/data/stereo/tsukuba/im2.png");
-	int numRows = imL.rows, numCols = imL.cols;
-	int numDisps, maxDisp, visualizeScale;
-	SetupStereoParameters("tsukuba", numDisps, maxDisp, visualizeScale);
+	printf("Updating Messages msgMFactorToVar...\n");
+	#pragma omp parallel for
+	for (int alpha = 0; alpha < factorNodes.size(); alpha++) {
+		for (int k = 0; k < factorNodes[alpha].varNbs.size(); k++) {
+			int i = factorNodes[alpha].varNbs[k];
+			//printf("updating M_%dto%d ...\n", alpha, i);
+			UpdateMessageMFactorToVar(alpha, i);
 
-
-
-	float maxBeliefDiff = FLT_MAX;
-	for (int iter = 0; iter < maxIters && maxBeliefDiff > tol; iter++) {
-
-		printf("BP::Run iter = %d...\n", iter);
-		int tic = clock();
-
-		// currently processing in sequential order, consider random shuffle later.
-		printf("Updating Messages msgNVarToFactor...\n");
-		#pragma omp parallel for
-		for (int i = 0; i < varNodes.size(); i++) {
-			for (int k = 0; k < varNodes[i].factorNbs.size(); k++) {
-				int alpha = varNodes[i].factorNbs[k];
-				//printf("updating N_%dto%d ...\n", i, alpha);
-				UpdateMessageNVarToFactor(i, alpha);
-			}
 		}
-
-		printf("Updating Messages msgMFactorToVar...\n");
-		#pragma omp parallel for
-		for (int alpha = 0; alpha < factorNodes.size(); alpha++) {
-			for (int k = 0; k < factorNodes[alpha].varNbs.size(); k++) {
-				int i = factorNodes[alpha].varNbs[k];
-				//printf("updating M_%dto%d ...\n", alpha, i);
-				UpdateMessageMFactorToVar(alpha, i);
-
-			}
-		}
-
-		printf("Updating Beliefs...\n");
-		maxBeliefDiff = -FLT_MAX;
-		#pragma omp parallel for
-		for (int i = 0; i < allBeliefs.size(); i++) {
-			Probs  oldBelief = allBeliefs[i];
-			Probs &newBelief = allBeliefs[i];
-
-			newBelief = varNodes[i].pot;
-			for (int k = 0; k < varNodes[i].factorNbs.size(); k++) {
-				int alpha = varNodes[i].factorNbs[k];
-				newBelief += MsgRefM(alpha, i);
-			}
-
-			NormalizeBelief(newBelief);
-			for (int x_i = 0; x_i < newBelief.size(); x_i++) {
-				maxBeliefDiff = std::max(maxBeliefDiff, std::abs(oldBelief[x_i] - newBelief[x_i]));
-			}
-		}
-		printf("maxBeliefDiff = %lf\n", maxBeliefDiff);
-		printf("%.2fs\n", (clock() - tic) / 1000.f);
-
-		/*cv::Mat dispL = DecodeDisparityFromBeliefs(numRows, numCols, allBeliefs);
-		EvaluateDisparity(rootFolder, dispL);*/
-		cv::Mat splitImg = DecodeSplittingImageFromBeliefs(numRows, numCols, allBeliefs);
-		cv::imshow("slitImg", splitImg);
-		cv::waitKey(0);
-		//printf("enter any thing:");
-		//int tmp;
-		//scanf("%d", &tmp);
 	}
+
+	printf("Updating Beliefs...\n");
+	float maxBeliefDiff = -FLT_MAX;
+	#pragma omp parallel for
+	for (int i = 0; i < allBeliefs.size(); i++) {
+		Probs  oldBelief = allBeliefs[i];
+		Probs &newBelief = allBeliefs[i];
+
+		newBelief = varNodes[i].pot;
+		for (int k = 0; k < varNodes[i].factorNbs.size(); k++) {
+			int alpha = varNodes[i].factorNbs[k];
+			newBelief += MsgRefM(alpha, i);
+		}
+
+		NormalizeBelief(newBelief);
+		for (int x_i = 0; x_i < newBelief.size(); x_i++) {
+			maxBeliefDiff = std::max(maxBeliefDiff, std::abs(oldBelief[x_i] - newBelief[x_i]));
+		}
+	}
+	printf("maxBeliefDiff = %lf\n", maxBeliefDiff);
+	printf("%.2fs\n", (clock() - tic) / 1000.f);
+
+	return maxBeliefDiff;
 }
 
-void BP::UpdateMessageNVarToFactor(int i, int alpha)
+void BPOnFG::UpdateMessageNVarToFactor(int i, int alpha)
 {
 	Message &nI2Alpha = MsgRefN(i, alpha);
 	nI2Alpha = varNodes[i].pot;
@@ -179,7 +157,7 @@ void BP::UpdateMessageNVarToFactor(int i, int alpha)
 	NormalizeMessage(nI2Alpha);
 }
 
-void BP::UpdateMessageMFactorToVar(int alpha, int i)
+void BPOnFG::UpdateMessageMFactorToVar(int alpha, int i)
 {
 	Message &mAlpha2i = MsgRefM(alpha, i);
 	std::fill(mAlpha2i.begin(), mAlpha2i.end(), FLT_MAX);
@@ -202,19 +180,19 @@ void BP::UpdateMessageMFactorToVar(int alpha, int i)
 	}
 }
 
-std::vector<float>& BP::MsgRefN(int i, int alpha)
+std::vector<float>& BPOnFG::MsgRefN(int i, int alpha)
 {
 	int alphaLocalIdx = LocalIdxInNbs(varNodes[i].factorNbs, alpha);
 	return varNodes[i].msgNVarToFactor[alphaLocalIdx];
 }
 
-std::vector<float>& BP::MsgRefM(int alpha, int i)
+std::vector<float>& BPOnFG::MsgRefM(int alpha, int i)
 {
 	int iLocalIdx = LocalIdxInNbs(factorNodes[alpha].varNbs, i);
 	return factorNodes[alpha].msgMFactorToVar[iLocalIdx];
 }
 
-int BP::LocalIdxInNbs(std::vector<int> &arr, int val)
+int BPOnFG::LocalIdxInNbs(std::vector<int> &arr, int val)
 {
 	for (int i = 0; i < arr.size(); i++) {
 		if (arr[i] == val) {
@@ -226,7 +204,7 @@ int BP::LocalIdxInNbs(std::vector<int> &arr, int val)
 	return -1;
 }
 
-std::vector<int> BP::LinearIdToConfig(int linearStateId, int factorId)
+std::vector<int> BPOnFG::LinearIdToConfig(int linearStateId, int factorId)
 {
 	std::vector<int> &bases = factorNodes[factorId].bases;
 	std::vector<int> config(bases.size());
@@ -237,7 +215,7 @@ std::vector<int> BP::LinearIdToConfig(int linearStateId, int factorId)
 	return config;
 }
 
-void BP::NormalizeMessage(Message &msg)
+void BPOnFG::NormalizeMessage(Message &msg)
 {
 	float minVal = *std::min_element(msg.begin(), msg.end());
 	for (int i = 0; i < msg.size(); i++) {
@@ -245,7 +223,7 @@ void BP::NormalizeMessage(Message &msg)
 	}
 }
 
-void BP::NormalizeBelief(Probs &p)
+void BPOnFG::NormalizeBelief(Probs &p)
 {
 	float sum = 0.0;
 	for (int i = 0; i < p.size(); i++) {
@@ -256,67 +234,45 @@ void BP::NormalizeBelief(Probs &p)
 		p[i] /= sum;
 	}
 }
+///////////////////////////////////////////////////// End of BPOnFG  /////////////////////////////////////////////////////
 
-float BP::SmoothnessCost(std::vector<int> &varInds, std::vector<int> &config)
+
+
+
+
+/////////////////////////////////////////////////////  RegularGridBPOnFG  /////////////////////////////////////////////////////
+void RegularGridBPOnFG::Run(std::string rootFolder, int maxIters, float tol)
+{
+	cv::Mat imL = cv::imread("d:/data/stereo/" + rootFolder + "/im2.png");
+	int numRows = imL.rows, numCols = imL.cols;
+
+	for (int iter = 0; iter < maxIters; iter++) {
+		RunNextIteration();
+		cv::Mat dispL = DecodeDisparityFromBeliefs(numRows, numCols, allBeliefs);
+		EvaluateDisparity(rootFolder, dispL);
+	}
+}
+
+float RegularGridBPOnFG::FactorPotential(std::vector<int> &varInds, std::vector<int> &config)
 {
 	// current doe not make use of varInds
 	ASSERT(config.size() == 2)
 	return LAMBDA * std::min(PAIRWISECUTOFF, std::abs(config[0] - config[1]));
 }
 
-float TangentPlaneDist(SlantedPlane &p, SlantedPlane &q, cv::Point2d &Xp, cv::Point2d &Xq)
+cv::Mat RegularGridBPOnFG::DecodeDisparityFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs)
 {
-	const float cutoff = 15.0;
-	float Dp  = p.ToDisparity(Xp.y, Xp.x);
-	float Dq  = q.ToDisparity(Xq.y, Xq.y);
-	float Dpq = p.ToDisparity(Xq.y, Xq.y);
-	float Dqp = q.ToDisparity(Xp.y, Xp.x);
-	return 0.5 * (std::min(cutoff, std::abs(Dq - Dpq)) + std::min(cutoff, std::abs(Dp - Dqp)));
-}
-
-float BP::FactorPotential(std::vector<int> &varInds, std::vector<int> &config)
-{
-	//return 0;
-	ASSERT(config.size() == 2 || config.size() == 3)
-	const cv::Point2d halfOffset(0.5, 0.5);
-	if (config.size() == 2) {
-		int numPrivateVertices = candidateLabels.size();	// for clarity.
-		if (varInds[0] < numPrivateVertices) {
-			ASSERT(varInds[1] < numPrivateVertices)
-			return TangentPlaneDist(candidateLabels[varInds[0]][config[0]], candidateLabels[varInds[1]][config[1]],
-				varCoords[varInds[0]] - halfOffset, varCoords[varInds[1]] - halfOffset);
-		}
-		else {
-			return TAU2 * (config[0] == config[1] ? 0 : 1);
+	cv::Mat dispMap(numRows, numCols, CV_32FC1);
+	for (int y = 0, id = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++, id++) {
+			Probs &belief = allBeliefs[id];
+			dispMap.at<float>(y, x) = std::min_element(belief.begin(), belief.end()) - belief.begin();
 		}
 	}
-	else {
-		if (config[2] == BOOL_SPLIT) {
-			return 0.f;
-		}
-		else {
-			ASSERT(varInds[0] < varCoords.size())
-			if (varInds[0] >= candidateLabels.size()) {
-				printf("varInds[0] = %d\n", varInds[0]);
-				printf("varInds[1] = %d\n", varInds[1]);
-				printf("varInds[2] = %d\n", varInds[2]);
-				printf("candidateLabels.size() = %d\n", candidateLabels.size());
-			}
-			ASSERT(varInds[0] < candidateLabels.size())
-			ASSERT(varInds[1] < candidateLabels.size())
-			cv::Point2d &p = varCoords[varInds[0]] - halfOffset;
-			float d1 = candidateLabels[varInds[0]][config[0]].ToDisparity(p.y, p.x);
-			float d2 = candidateLabels[varInds[1]][config[1]].ToDisparity(p.y, p.x);
-			return TAU3 * (std::abs(d1 - d2) > 1e-4);
-		}
-	}
-	ASSERT(0) // You would never reach here.
-	return 0;
+	return dispMap;
 }
 
-enum FactorType { LIEONHORIZONTAL, LIEONVERTICAL };
-
-static int GetFactorId(int y, int x, int numRows, int numCols, FactorType factorType)
+int RegularGridBPOnFG::GetFactorId(int y, int x, int numRows, int numCols, FactorType factorType)
 {
 	if (factorType == LIEONHORIZONTAL) {
 		return y * (numCols - 1) + x;
@@ -327,7 +283,7 @@ static int GetFactorId(int y, int x, int numRows, int numCols, FactorType factor
 	}
 }
 
-void BP::InitFromGridGraph(MCImg<float> &unaryCosts)
+void RegularGridBPOnFG::InitFromGridGraph(MCImg<float> &unaryCosts)
 {
 	// Factor node ID coding scheme: there are two types of factor nodes on grid graph.
 	// Fist type lies on horizontal connection, second type lies on vertical connection.
@@ -401,12 +357,38 @@ void BP::InitFromGridGraph(MCImg<float> &unaryCosts)
 
 	printf("done.\n");
 }
+/////////////////////////////////////////////////////  End of RegularGridBPOnFG  /////////////////////////////////////////////////////
 
-void BP::InitFromTriangulation(int numRows, int numCols, int numDisps,
+
+
+
+
+/////////////////////////////////////////////////////  MeshStereoBPOnFG  /////////////////////////////////////////////////////
+void InitalizeTau()
+{
+	FILE *fid = fopen("d:/data/TAU.txt", "r");
+	ASSERT(fid != NULL);
+	fscanf(fid, "TAU1 = %f\n", &TAU1);
+	fscanf(fid, "TAU2 = %f\n", &TAU2);
+	fscanf(fid, "TAU3 = %f\n", &TAU3);
+	fscanf(fid, "TANGENT_LAMBDA = %f\n", &TANGENT_LAMBDA);
+	fscanf(fid, "TANGENT_CUTOFF = %f", &TANGENT_CUTOFF);
+	fclose(fid);
+
+	printf("TAU1           = %f\n", TAU1);
+	printf("TAU2           = %f\n", TAU2);
+	printf("TAU3           = %f\n", TAU3);
+	printf("TANGENT_LAMBDA = %f\n", TANGENT_LAMBDA);
+	printf("TANGENT_CUTOFF = %f\n", TANGENT_CUTOFF);
+}
+
+void MeshStereoBPOnFG::InitFromTriangulation(int numRows, int numCols, int numDisps,
 	std::vector<std::vector<SlantedPlane>> &candidateLabels, std::vector<std::vector<float>> &unaryCosts,
 	std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
 	std::vector<std::vector<cv::Point2i>> &triPixelList, cv::Mat &img)
 {
+	InitalizeTau();
+
 	int numTriangles = triVertexInds.size();
 	int numPrivateVertices = 3 * numTriangles;
 	int numSplitNodes = vertexCoords.size();
@@ -595,6 +577,8 @@ void BP::InitFromTriangulation(int numRows, int numCols, int numDisps,
 		varCoords[3 * id + 2] = vertexCoords[triVertexInds[id][2]];
 	}
 	varCoords.insert(varCoords.end(), vertexCoords.begin(), vertexCoords.end());
+	this->vertexCoords = vertexCoords;
+	this->triVertexInds = triVertexInds;
 	
 	/*for (int id = 0; id < numTriangles; id++) {
 		std::vector<cv::Point2i> &coordList = triPixelList[id];
@@ -616,19 +600,116 @@ void BP::InitFromTriangulation(int numRows, int numCols, int numDisps,
 
 }
 
-cv::Mat BP::DecodeSplittingImageFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs)
+static float TangentPlaneDist(SlantedPlane &p, SlantedPlane &q, cv::Point2d &Xp, cv::Point2d &Xq)
 {
+	/*const float cutoff = 15.0;*/
+	float Dp = p.ToDisparity(Xp.y, Xp.x);
+	float Dq = q.ToDisparity(Xq.y, Xq.y);
+	float Dpq = p.ToDisparity(Xq.y, Xq.y);
+	float Dqp = q.ToDisparity(Xp.y, Xp.x);
+	return 0.5 * (std::min(TANGENT_CUTOFF, std::abs(Dq - Dpq)) + std::min(TANGENT_CUTOFF, std::abs(Dp - Dqp)));
+}
+
+float MeshStereoBPOnFG::FactorPotential(std::vector<int> &varInds, std::vector<int> &config)
+{
+	//return 0;
+	ASSERT(config.size() == 2 || config.size() == 3)
+		const cv::Point2d halfOffset(0.5, 0.5);
+	if (config.size() == 2) {
+		int numPrivateVertices = candidateLabels.size();	// for clarity.
+		if (varInds[0] < numPrivateVertices) {
+			ASSERT(varInds[1] < numPrivateVertices)
+			return TANGENT_LAMBDA *
+				TangentPlaneDist(candidateLabels[varInds[0]][config[0]], candidateLabels[varInds[1]][config[1]],
+				varCoords[varInds[0]] - halfOffset, varCoords[varInds[1]] - halfOffset);
+		}
+		else {
+			return TAU2 * (config[0] == config[1] ? 0 : 1);
+		}
+	}
+	else {
+		if (config[2] == BOOL_SPLIT) {
+			return 0.f;
+		}
+		else {
+			ASSERT(varInds[0] < varCoords.size())
+			if (varInds[0] >= candidateLabels.size()) {
+				printf("varInds[0] = %d\n", varInds[0]);
+				printf("varInds[1] = %d\n", varInds[1]);
+				printf("varInds[2] = %d\n", varInds[2]);
+				printf("candidateLabels.size() = %d\n", candidateLabels.size());
+			}
+			ASSERT(varInds[0] < candidateLabels.size())
+				ASSERT(varInds[1] < candidateLabels.size())
+				cv::Point2d &p = varCoords[varInds[0]] - halfOffset;
+			float d1 = candidateLabels[varInds[0]][config[0]].ToDisparity(p.y, p.x);
+			float d2 = candidateLabels[varInds[1]][config[1]].ToDisparity(p.y, p.x);
+			return TAU3 * (std::abs(d1 - d2) > 1e-4);
+		}
+	}
+	ASSERT(0) // You would never reach here.
+		return 0;
+}
+
+cv::Mat MeshStereoBPOnFG::DecodeSplittingImageFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs)
+{
+	cv::Mat splitMap(numRows + 1, numCols + 1, CV_32SC1);
+	splitMap.setTo((bool)0);
 	cv::Mat canvas(numRows, numCols, CV_8UC3);
 	canvas.setTo(cv::Vec3b(0, 0, 0));
+
 	int numPrivateVertices = this->candidateLabels.size();
 	for (int i = numPrivateVertices; i < varCoords.size(); i++) {
 		if (allBeliefs[i][1] < allBeliefs[i][0]) {
 			cv::Point2d p = varCoords[i];
-			cv::circle(canvas, p - cv::Point2d(0.5, 0.5), 1.5, cv::Scalar(0, 0, 255), 2);
+			splitMap.at<bool>(p.y, p.x) = true;
+			cv::circle(canvas, p - cv::Point2d(0.5, 0.5), 0, cv::Scalar(0, 0, 255), 2, CV_AA);
 		}
 	}
+
+#if 0
+	const cv::Point2d halfOffset(0.5, 0.5);
+	for (int id = 0; id < triVertexInds.size(); id++) {
+		cv::Point2d A = vertexCoords[triVertexInds[id][0]];
+		cv::Point2d B = vertexCoords[triVertexInds[id][1]];
+		cv::Point2d C = vertexCoords[triVertexInds[id][2]];
+		if (splitMap.at<bool>(A.y, A.x) && splitMap.at<bool>(B.y, B.x)) {
+			cv::line(canvas, A - halfOffset, B - halfOffset, cv::Scalar(0, 0, 255), 1);
+		}
+		if (splitMap.at<bool>(A.y, A.x) && splitMap.at<bool>(C.y, C.x)) {
+			cv::line(canvas, A - halfOffset, C - halfOffset, cv::Scalar(0, 0, 255), 1);
+		}
+		if (splitMap.at<bool>(C.y, C.x) && splitMap.at<bool>(B.y, B.x)) {
+			cv::line(canvas, C - halfOffset, B - halfOffset, cv::Scalar(0, 0, 255), 1);
+		}
+	}
+#endif
+
 	return canvas;
 }
+
+void MeshStereoBPOnFG::Run(std::string rootFolder, int maxIters, float tol)
+{
+	cv::Mat imL = cv::imread("d:/data/stereo/" + rootFolder + "/im2.png");
+	int numRows = imL.rows, numCols = imL.cols;
+
+	for (int iter = 0; iter < maxIters; iter++) {
+		float maxBeliefDiff = RunNextIteration();
+		cv::Mat splitImg = DecodeSplittingImageFromBeliefs(numRows, numCols, allBeliefs);
+		cv::imshow("splitImg", splitImg);
+		cv::waitKey(0);
+		//EvaluateDisparity(rootFolder, dispL);
+		if (maxBeliefDiff < tol) {
+			printf("Beliefs has converged at maxBelifDiff = %f, exiting...\n", maxBeliefDiff);
+			break;
+		}
+	}
+}
+/////////////////////////////////////////////////////  End of MeshStereoBPOnFG  /////////////////////////////////////////////////////
+
+
+
+
 
 void TestLBPOnFactorGraph()
 {
@@ -647,9 +728,11 @@ void TestLBPOnFactorGraph()
 	cv::Mat dispL = WinnerTakesAll(unaryCosts, 1);
 	EvaluateDisparity("tsukuba", dispL);
 #else
-	BP bp;
-	std::vector<int> outLabels;
+	RegularGridBPOnFG bp;
 	bp.InitFromGridGraph(unaryCosts);
-	bp.Run("tsukuba", outLabels);
+	bp.Run("tsukuba");
 #endif
 }
+
+
+

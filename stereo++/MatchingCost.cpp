@@ -6,23 +6,6 @@
 #include "SlantedPlane.h"
 #include "StereoAPI.h"
 
-#ifdef _DEBUG
-#pragma comment(lib, "opencv_core248d.lib")
-#pragma comment(lib, "opencv_highgui248d.lib")
-#pragma comment(lib, "opencv_imgproc248d.lib")
-#pragma comment(lib, "opencv_features2d248d.lib")
-#pragma comment(lib, "opencv_calib3d248d.lib")
-#pragma comment(lib, "opencv_video248d.lib")
-#pragma comment(lib, "opencv_flann248d.lib")
-#else
-#pragma comment(lib, "opencv_core248.lib")
-#pragma comment(lib, "opencv_highgui248.lib")
-#pragma comment(lib, "opencv_imgproc248.lib")
-#pragma comment(lib, "opencv_features2d248.lib")
-#pragma comment(lib, "opencv_calib3d248.lib")
-#pragma comment(lib, "opencv_video248.lib")
-#pragma comment(lib, "opencv_flann248.lib")
-#endif
 
 
 #define ASSERT(condition)								\

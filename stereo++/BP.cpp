@@ -48,9 +48,9 @@ static inline float *GetMessage(cv::Point2i &s, cv::Point2i &t, MCImg<float> &al
 	return allMessages.get(t.y, t.x);
 }
 
-static void UpdateMessage(cv::Point2i &s, cv::Point2i &t, MCImg<float> &oldMessages, MCImg<float> &newMessages, MCImg<float> &unaryCost)
+static void UpdateMessage(cv::Point2i &s, cv::Point2i &t, MCImg<float> &oldMessages, MCImg<float> &newMessages, MCImg<float> &unaryCosts)
 {
-	int  numRows = unaryCost.h, numCols = unaryCost.w, numDisps = unaryCost.n;
+	int  numRows = unaryCosts.h, numCols = unaryCosts.w, numDisps = unaryCosts.n;
 	if (!InBound(s, numRows, numCols) || !InBound(t, numRows, numCols)) {
 		return;
 	}
@@ -62,7 +62,7 @@ static void UpdateMessage(cv::Point2i &s, cv::Point2i &t, MCImg<float> &oldMessa
 
 		float bestCost = FLT_MAX;
 		for (int xs = 0; xs < numDisps; xs++) {
-			float tmpCost = unaryCost.get(s.y, s.x)[xs] + PairwiseCost(xs, xt);
+			float tmpCost = unaryCosts.get(s.y, s.x)[xs] + PairwiseCost(xs, xt);
 			for (int k = 0; k < 4; k++) {
 				cv::Point2i q = s + dirDelta[k];
 				if (InBound(q, numRows, numCols) && q != t) {
@@ -83,9 +83,9 @@ static void UpdateMessage(cv::Point2i &s, cv::Point2i &t, MCImg<float> &oldMessa
 	}
 }
 
-static float UpdateBelief(cv::Point2i &t, MCImg<float> &allBeliefs, MCImg<float> &allMessages, MCImg<float> &unaryCost)
+static float UpdateBelief(cv::Point2i &t, MCImg<float> &allBeliefs, MCImg<float> &allMessages, MCImg<float> &unaryCosts)
 {
-	int numRows = unaryCost.h, numCols = unaryCost.w, numDisps = unaryCost.n;
+	int numRows = unaryCosts.h, numCols = unaryCosts.w, numDisps = unaryCosts.n;
 	float maxDiff = -1;
 	float *s2tMsgs[4] = { 0 };
 
@@ -99,7 +99,7 @@ static float UpdateBelief(cv::Point2i &t, MCImg<float> &allBeliefs, MCImg<float>
 
 	float *belief = allBeliefs.get(t.y, t.x);
 	for (int xt = 0; xt < numDisps; xt++) {
-		float newBelief = unaryCost.get(t.y, t.x)[xt];
+		float newBelief = unaryCosts.get(t.y, t.x)[xt];
 		for (int k = 0; k < 4; k++) {
 			if (s2tMsgs[k]) {
 				newBelief += s2tMsgs[k][xt];
@@ -131,9 +131,9 @@ static cv::Mat DecodeDisparityFromBeliefs(MCImg<float> &allBeliefs)
 	return dispMap;
 }
 
-static cv::Mat RunLoopyBPOnGrideGraph(std::string rootFolder, MCImg<float> &unaryCost)
+static cv::Mat RunLoopyBPOnGrideGraph(std::string rootFolder, MCImg<float> &unaryCosts)
 {
-	int numRows = unaryCost.h, numCols = unaryCost.w, numDisps = unaryCost.n;
+	int numRows = unaryCosts.h, numCols = unaryCosts.w, numDisps = unaryCosts.n;
 	std::vector<cv::Point2i> pixelList(numRows * numCols);
 	for (int y = 0, id = 0; y < numRows; y++) {
 		for (int x = 0; x < numCols; x++, id++) {
@@ -162,7 +162,7 @@ static cv::Mat RunLoopyBPOnGrideGraph(std::string rootFolder, MCImg<float> &unar
 			std::vector<std::pair<std::string, void*>> auxParams;
 			auxParams.push_back(std::pair<std::string, void*>("allMessages", &oldMessages));
 			auxParams.push_back(std::pair<std::string, void*>("allBeliefs",  &allBeliefs));
-			auxParams.push_back(std::pair<std::string, void*>("unaryCost",   &unaryCost));
+			auxParams.push_back(std::pair<std::string, void*>("unaryCosts",   &unaryCosts));
 			EvaluateDisparity(rootFolder, dispMap, 1.f, auxParams, "OnMouseLoopyBPOnGridGraph");
 		}
 
@@ -182,7 +182,7 @@ static cv::Mat RunLoopyBPOnGrideGraph(std::string rootFolder, MCImg<float> &unar
 			cv::Point2i s = pixelList[i];
 			for (int k = 0; k < 4; k++) {
 				cv::Point2i t = s + dirDelta[k];
-				UpdateMessage(s, t, oldMessages, newMessages, unaryCost);
+				UpdateMessage(s, t, oldMessages, newMessages, unaryCosts);
 			}
 		}
 		memcpy(oldMessages.data, newMessages.data, 4 * numRows * numCols * numDisps * sizeof(float));
@@ -191,7 +191,7 @@ static cv::Mat RunLoopyBPOnGrideGraph(std::string rootFolder, MCImg<float> &unar
 		maxBeliefDiff = -1;
 		for (int i = 0; i < pixelList.size(); i++) {
 			cv::Point2i t = pixelList[i];
-			float maxDiff = UpdateBelief(t, allBeliefs, oldMessages, unaryCost);
+			float maxDiff = UpdateBelief(t, allBeliefs, oldMessages, unaryCosts);
 			maxBeliefDiff = std::max(maxBeliefDiff, maxDiff);
 		}
 		printf("maxBeliefDiff = %f\n", maxBeliefDiff);
@@ -240,23 +240,23 @@ void RunLoopyBP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 		bs::Timer::Toc();
 	}
 
-	MCImg<float> unaryCost(numRows, numCols, numDisps);
-#if 0
-	memcpy(unaryCost.data, gDsiL.data, numRows * numCols * numDisps * sizeof(float));
+	MCImg<float> unaryCosts(numRows, numCols, numDisps);
+#if 1
+	memcpy(unaryCosts.data, gDsiL.data, numRows * numCols * numDisps * sizeof(float));
 #else
 	#pragma omp parallel for
 	for (int y = 0; y < numRows; y++) {
 		for (int x = 0; x < numCols; x++) {
 			for (int d = 0; d < numDisps; d++) {
 				SlantedPlane sp = SlantedPlane::ConstructFromAbc(0.f, 0.f, d);
-				unaryCost.get(y, x)[d] = PatchMatchSlantedPlaneCost(y, x, sp, -1);
+				unaryCosts.get(y, x)[d] = PatchMatchSlantedPlaneCost(y, x, sp, -1);
 			}
 		}
 	}
 #endif
 
-	cv::Mat dispL = RunLoopyBPOnGrideGraph(rootFolder, unaryCost);
-	//cv::Mat dispL = WinnerTakesAll(unaryCost, GRANULARITY);
+	cv::Mat dispL = RunLoopyBPOnGrideGraph(rootFolder, unaryCosts);
+	//cv::Mat dispL = WinnerTakesAll(unaryCosts, GRANULARITY);
 	EvaluateDisparity(rootFolder, dispL);
 }
 

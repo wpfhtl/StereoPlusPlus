@@ -466,10 +466,10 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 	std::vector<std::vector<float>> unaryCosts;
 	GenerateMeshStereoCandidateLabels(numRows, numCols, numDisps, 
 		baryCentersL, slantedPlanesL, vertexCoordsL, triVertexIndsL, nbIndicesL, candidateLabels, unaryCosts);
-	BP bp;
+	MeshStereoBPOnFG bp;
 	bp.InitFromTriangulation(numRows, numCols, numDisps, candidateLabels, unaryCosts, vertexCoordsL, triVertexIndsL, triPixelListsL, imL);
 	std::vector<int> outLabels;
-	bp.Run(rootFolder, outLabels);
+	bp.Run(rootFolder);
 	
 }
 

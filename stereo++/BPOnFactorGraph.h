@@ -1,5 +1,4 @@
 #pragma once
-
 #ifndef __BPONFACTORGRAPH_H__
 #define __BPONFACTORGRAPH_H__
 
@@ -37,20 +36,17 @@ struct FactorNode
 	std::vector<int>		bases;
 };
 
-class BP
+class BPOnFG
 {
 public:
 	std::vector<VarNode>	varNodes;
 	std::vector<FactorNode> factorNodes;
 	std::vector<Probs>		allBeliefs;
 
-	std::vector<std::vector<SlantedPlane>>	candidateLabels;
-	std::vector<cv::Point2d>				varCoords;
-	std::vector<cv::Vec3b>					triMeanColors;
+
 
 public:
-
-	void BP::Run(std::string rootFolder, std::vector<int> &outLabels, int maxIters = 2000, float tol = 1e-4);
+	float RunNextIteration();
 
 	void UpdateMessageNVarToFactor(int i, int alpha);
 
@@ -60,19 +56,45 @@ public:
 
 	std::vector<float>& MsgRefM(int alpha, int i);
 
-	int LocalIdxInNbs(std::vector<int> &arr, int val);
-
 	std::vector<int> LinearIdToConfig(int linearStateId, int factorId);
+
+	int LocalIdxInNbs(std::vector<int> &arr, int val);
 
 	void NormalizeMessage(Message &msg);
 
 	void NormalizeBelief(Probs &p);
 
-	float SmoothnessCost(std::vector<int> &varInds, std::vector<int> &config);
+	virtual float FactorPotential(std::vector<int> &varInds, std::vector<int> &config) = 0;
+};
 
+class RegularGridBPOnFG : public BPOnFG
+{
+public:
+	enum FactorType { LIEONHORIZONTAL, LIEONVERTICAL };
+
+public:
 	void InitFromGridGraph(MCImg<float> &unaryCosts);
 
-	void BP::InitFromTriangulation(int numRows, int numCols, int numDisps,
+	float FactorPotential(std::vector<int> &varInds, std::vector<int> &config);
+
+	int GetFactorId(int y, int x, int numRows, int numCols, FactorType factorType);
+
+	cv::Mat DecodeDisparityFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs);
+
+	void Run(std::string rootFolder, int maxIters = 200, float tol = 1e-4);
+};
+
+class MeshStereoBPOnFG : public BPOnFG
+{
+public:
+	std::vector<std::vector<SlantedPlane>>	candidateLabels;
+	std::vector<cv::Point2d>				varCoords;
+	std::vector<cv::Vec3b>					triMeanColors;
+	std::vector<cv::Point2d>				vertexCoords;
+	std::vector<std::vector<int>>			triVertexInds;
+
+public:
+	void InitFromTriangulation(int numRows, int numCols, int numDisps,
 		std::vector<std::vector<SlantedPlane>> &candidateLabels, std::vector<std::vector<float>> &unaryCosts,
 		std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
 		std::vector<std::vector<cv::Point2i>> &triPixelList, cv::Mat &img);
@@ -80,7 +102,8 @@ public:
 	float FactorPotential(std::vector<int> &varInds, std::vector<int> &config);
 
 	cv::Mat DecodeSplittingImageFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs);
-};
 
+	void Run(std::string rootFolder, int maxIters = 200, float tol = 1e-4);
+};
 
 #endif
