@@ -696,8 +696,8 @@ void Triangulate2DImage(cv::Mat& img, std::vector<cv::Point2d> &vertexCoords, st
 	cv::Mat labelMap, contourImg;
 	int numSeg = SLICSegmentation(img, numPreferedRegions, compactness, labelMap, contourImg);
 	cv::Mat canvas = TriangulateSLICSegments(labelMap, numSeg, mergeRadius, vertexCoords, triVertexInds);
-	cv::imshow("canvas", canvas);
-	cv::waitKey(0);
+	//cv::imshow("canvas", canvas);
+	//cv::waitKey(0);
 }
 
 void TestTriangulation2D()

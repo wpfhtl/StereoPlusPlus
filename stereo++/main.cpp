@@ -10,17 +10,17 @@ int main()
 	//void TestPatchMatchOnPixels();
 	//TestPatchMatchOnPixels();
 
-	/*void TestTriangulation2D();
-	TestTriangulation2D();*/
+	//void TestTriangulation2D();
+	//TestTriangulation2D();
 
-	/*void TestPatchMatchOnTriangles();
-	TestPatchMatchOnTriangles();*/
+	void TestPatchMatchOnTriangles();
+	TestPatchMatchOnTriangles();
 
-	/*void TestLBPOnGridGraph();
-	TestLBPOnGridGraph();*/
+	//void TestLBPOnGridGraph();
+	//TestLBPOnGridGraph();
 
-	void TestLBPOnFactorGraph();
-	TestLBPOnFactorGraph();
+	//void TestLBPOnFactorGraph();
+	//TestLBPOnFactorGraph();
 
 	return 0;
 }

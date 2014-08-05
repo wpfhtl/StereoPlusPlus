@@ -1,0 +1,86 @@
+#pragma once
+
+#ifndef __BPONFACTORGRAPH_H__
+#define __BPONFACTORGRAPH_H__
+
+
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+
+#include <cassert>
+#include <ctime>
+#include <vector>
+#include <set>
+#include <algorithm>
+
+#include "SlantedPlane.h"
+#include "MCImg.h"
+
+
+typedef std::vector<float> Message;
+typedef std::vector<float> Probs;
+
+struct VarNode
+{
+	int						numLabels;
+	std::vector<float>		pot;
+	std::vector<int>		factorNbs;
+	std::vector<Message>	msgNVarToFactor;
+};
+
+struct FactorNode
+{
+	int						numConfigs;
+	std::vector<int>		varNbs;
+	std::vector<Message>	msgMFactorToVar;
+	std::vector<int>		bases;
+};
+
+class BP
+{
+public:
+	std::vector<VarNode>	varNodes;
+	std::vector<FactorNode> factorNodes;
+	std::vector<Probs>		allBeliefs;
+
+	std::vector<std::vector<SlantedPlane>>	candidateLabels;
+	std::vector<cv::Point2d>				varCoords;
+	std::vector<cv::Vec3b>					triMeanColors;
+
+public:
+
+	void BP::Run(std::string rootFolder, std::vector<int> &outLabels, int maxIters = 2000, float tol = 1e-4);
+
+	void UpdateMessageNVarToFactor(int i, int alpha);
+
+	void UpdateMessageMFactorToVar(int alpha, int i);
+
+	std::vector<float>& MsgRefN(int i, int alpha);
+
+	std::vector<float>& MsgRefM(int alpha, int i);
+
+	int LocalIdxInNbs(std::vector<int> &arr, int val);
+
+	std::vector<int> LinearIdToConfig(int linearStateId, int factorId);
+
+	void NormalizeMessage(Message &msg);
+
+	void NormalizeBelief(Probs &p);
+
+	float SmoothnessCost(std::vector<int> &varInds, std::vector<int> &config);
+
+	void InitFromGridGraph(MCImg<float> &unaryCosts);
+
+	void BP::InitFromTriangulation(int numRows, int numCols, int numDisps,
+		std::vector<std::vector<SlantedPlane>> &candidateLabels, std::vector<std::vector<float>> &unaryCosts,
+		std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
+		std::vector<std::vector<cv::Point2i>> &triPixelList, cv::Mat &img);
+
+	float FactorPotential(std::vector<int> &varInds, std::vector<int> &config);
+
+	cv::Mat DecodeSplittingImageFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs);
+};
+
+
+#endif

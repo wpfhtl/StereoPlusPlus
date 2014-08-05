@@ -42,7 +42,7 @@ enum CostAggregationType	{ REGULAR_GRID, TOP50 };
 enum MatchingCostType		{ ADGRADIENT, ADCENSUS };
 
 CostAggregationType		gCostAggregationType	= REGULAR_GRID;
-MatchingCostType		gMatchingCostType		= ADGRADIENT;
+MatchingCostType		gMatchingCostType		= ADCENSUS;
 
 MCImg<float>			gDsiL;
 MCImg<float>			gDsiR;
@@ -309,7 +309,7 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 	int numRows = dsi.h, numCols = dsi.w, maxLevel = dsi.n - 1;
 	const int STRIDE = 1;
 	float totalCost = 0.f;
-	int numPixelsInBound = 0;
+	float accWeight = 0.f;
 
 	if (gCostAggregationType == REGULAR_GRID) {
 		MCImg<float> w(PATCHWIDTH, PATCHWIDTH, 1, simWeights.line(yc * numCols + xc));
@@ -321,7 +321,7 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 					int level = 0.5 + d / GRANULARITY;
 					level = std::max(0, std::min(maxLevel, level));
 					totalCost += w.data[id] * dsi.get(y, x)[level];
-					numPixelsInBound++;
+					accWeight += w.data[id];
 				}
 			}
 		}
@@ -335,11 +335,11 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 			int level = 0.5 + d / GRANULARITY;
 			level = std::max(0, std::min(maxLevel, level));
 			totalCost += simVec.w[i] * dsi.get(y, x)[level];
+			accWeight += simVec.w[i];
 		}
-		numPixelsInBound = SIMVECTORSIZE;
 	}
 
 	//return totalCost / numPixelsInBound;
-	return totalCost;
+	return totalCost / accWeight;
 }
 

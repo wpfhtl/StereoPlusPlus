@@ -241,7 +241,7 @@ void RunLoopyBP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	}
 
 	MCImg<float> unaryCost(numRows, numCols, numDisps);
-#if 1
+#if 0
 	memcpy(unaryCost.data, gDsiL.data, numRows * numCols * numDisps * sizeof(float));
 #else
 	#pragma omp parallel for

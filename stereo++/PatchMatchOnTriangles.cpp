@@ -8,6 +8,7 @@
 #include "StereoAPI.h"
 #include "SlantedPlane.h"
 #include "Timer.h"
+#include "BPOnFactorGraph.h"
 
 
 #define SIMILARITYGAMMA			10
@@ -115,7 +116,7 @@ static void ConstructNeighboringGraph(int numRows, int numCols, std::vector<cv::
 		cv::Point2d a = vertexCoords[triVertexInds[i][0]];
 		cv::Point2d b = vertexCoords[triVertexInds[i][1]];
 		cv::Point2d c = vertexCoords[triVertexInds[i][2]];
-		baryCenters[i] = cv::Point((a.x + b.x + c.x) / 3.0, (a.y + b.y + c.y) / 3.0);
+		baryCenters[i] = cv::Point((a.x + b.x + c.x) / 3.0 - 0.5, (a.y + b.y + c.y) / 3.0 - 0.5);
 	}
 
 	std::vector<std::pair<cv::Point2d, int>> centroidIdPairs(baryCenters.size());
@@ -150,13 +151,12 @@ static void ConstructNeighboringGraph(int numRows, int numCols, std::vector<cv::
 
 	// Visualize and verify the ordering
 	cv::Mat canvas(numRows, numCols, CV_8UC3);
-	cv::Point2d halfOffset(0.5, 0.5);
 #if 0
 	cv::Point2d oldEndPt(-0.5, -0.5);
 	int stepSz = numTriangles / 20;
 	for (int i = 0; i < numTriangles; i += stepSz) {
 		for (int j = i; j < i + stepSz && j < numTriangles; j++) {
-			cv::Point2d newEndPt = centroidIdPairs[j].first - halfOffset;
+			cv::Point2d newEndPt = centroidIdPairs[j].first;
 			cv::line(canvas, oldEndPt, newEndPt, cv::Scalar(0, 0, 255, 255), 1, CV_AA);
 			oldEndPt = newEndPt;
 		}
@@ -214,7 +214,7 @@ static void ConstructNeighboringGraph(int numRows, int numCols, std::vector<cv::
 	for (int retry = 0; retry < 100; retry++) {
 		canvas.setTo(cv::Scalar(0, 0, 0));
 		int id = rand() % numTriangles;
-		cv::Point2d A = baryCenters[id] - halfOffset;
+		cv::Point2d A = baryCenters[id];
 		for (int j = 0; j < nbIndices[id].size(); j++) {
 			cv::Point2d B = baryCenters[nbIndices[id][j]];
 			cv::line(canvas, A, B, cv::Scalar(0, 0, 255), 1, CV_AA);
@@ -227,7 +227,7 @@ static void ConstructNeighboringGraph(int numRows, int numCols, std::vector<cv::
 }
 
 static void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords,
-	std::vector<std::vector<int>> &triVertexInds, std::vector<std::vector<cv::Point2d>> &triPixelLists)
+	std::vector<std::vector<int>> &triVertexInds, std::vector<std::vector<cv::Point2i>> &triPixelLists)
 {
 	const cv::Point2d halfOffset(0.5, 0.5);
 	int numTriangles = triVertexInds.size();
@@ -246,7 +246,7 @@ static void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Po
 		for (int y = std::max(0, yU); y < yD && y < numRows; y++) {
 			for (int x = std::max(0, xL); x < xR && x < numCols; x++) {
 				if (PointInTriangle(cv::Point2d(x, y) + halfOffset, a, b, c)) {
-					triPixelLists[i].push_back(cv::Point2d(x, y));
+					triPixelLists[i].push_back(cv::Point2i(x, y));
 				}
 			}
 		}
@@ -271,18 +271,96 @@ static void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Po
 }
 
 static cv::Mat TriangleLabelToDisparityMap(int numRows, int numCols, std::vector<SlantedPlane> &slantedPlanes, 
-	std::vector<std::vector<cv::Point2d>> &triPixelLists)
+	std::vector<std::vector<cv::Point2i>> &triPixelLists)
 {
 	cv::Mat dispMap(numRows, numCols, CV_32FC1);
 	for (int id = 0; id < triPixelLists.size(); id++) {
-		std::vector<cv::Point2d> &pixelList = triPixelLists[id];
+		std::vector<cv::Point2i> &pixelList = triPixelLists[id];
 		for (int i = 0; i < pixelList.size(); i++) {
-			int y = pixelList[i].y + 0.5;
-			int x = pixelList[i].x + 0.5;
+			int y = pixelList[i].y;
+			int x = pixelList[i].x;
 			dispMap.at<float>(y, x) = slantedPlanes[id].ToDisparity(y, x);
 		}
 	}
 	return dispMap;
+}
+
+static void GenerateMeshStereoCandidateLabels(int numRows, int numCols, int numDisps, std::vector<cv::Point2d> &baryCenters, 
+	std::vector<SlantedPlane> &slantedPlanes, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds, 
+	std::vector<std::vector<int>> &nbIndices, std::vector<std::vector<SlantedPlane>> &candidateLabels, std::vector<std::vector<float>> &unaryCosts)
+{
+	int numTriangles = baryCenters.size();
+	int numPrivateVertices = 3 * numTriangles;
+	candidateLabels.resize(numPrivateVertices);
+
+	printf("Step 1.1 - Generate from spatial propagation ...\n");
+	for (int id = 0; id < numTriangles; id++) {
+		std::vector<SlantedPlane> labelSet;
+		// Label from its own triangle
+		labelSet.push_back(slantedPlanes[id]);
+		// Labels from neighboring triangles
+		for (int i = 0; i < nbIndices[id].size(); i++) {
+			int nbId = nbIndices[id][i];
+			labelSet.push_back(slantedPlanes[nbId]);
+		}
+		candidateLabels[3 * id + 0] = labelSet;
+		candidateLabels[3 * id + 1] = labelSet;
+		candidateLabels[3 * id + 2] = labelSet;
+	}
+
+	printf("Step 1.2 - Generate from intra group random search ...\n");
+	MCImg<std::vector<std::pair<int, int>>> triIndSets(numRows + 1, numCols + 1);
+	for (int id = 0; id < numTriangles; id++) {
+		for (int j = 0; j < 3; j++) {
+			cv::Point2d &p = vertexCoords[triVertexInds[id][j]];
+			triIndSets[p.y][(int)p.x].push_back(std::make_pair(id, j));
+		}
+	}
+
+	const int RAND_HALF = RAND_MAX / 2;
+	for (int y = 0; y < numRows + 1; y++) {
+		for (int x = 0; x < numCols + 1; x++) {
+
+			std::vector<std::pair<int, int>> &triIds = triIndSets[y][x];
+			if (!triIds.empty()) {
+				// Vertices in the same group share the same depth
+				float meanDisp = 0.f;
+				for (int k = 0; k < triIds.size(); k++) {
+					int id = triIds[k].first;
+					meanDisp += slantedPlanes[id].ToDisparity(y - 0.5f, x - 0.5f);
+				}
+				meanDisp /= (float)triIds.size();
+
+				float zRadius = (numDisps - 1) / 2.f;
+				float nRadius = 1.f;
+				while (zRadius >= 0.1f) {
+					float zNew = meanDisp + zRadius * (((float)rand() - RAND_HALF) / RAND_HALF);
+					for (int k = 0; k < triIds.size(); k++) {
+						int id = triIds[k].first;
+						float nx = slantedPlanes[id].nx + nRadius * (((float)rand() - RAND_HALF) / RAND_HALF);
+						float ny = slantedPlanes[id].ny + nRadius * (((float)rand() - RAND_HALF) / RAND_HALF);
+						float nz = slantedPlanes[id].nz + nRadius * (((float)rand() - RAND_HALF) / RAND_HALF);
+						SlantedPlane candidate = SlantedPlane::ConstructFromNormalDepthAndCoord(nx, ny, nz, zNew, y - 0.5f, x - 0.5f);
+						candidateLabels[3 * id + triIds[k].second].push_back(candidate);
+					}
+					zRadius /= 2.f;
+					nRadius /= 2.f;
+				}
+			}
+		}
+	}
+
+	// Store the cost of corresponding labels
+	unaryCosts.resize(numPrivateVertices);
+	for (int k = 0; k < numPrivateVertices; k++) {
+		int id = k / 3;
+		int yc = baryCenters[id].y + 0.5;
+		int xc = baryCenters[id].x + 0.5;
+		unaryCosts[k].resize(candidateLabels[k].size());
+		for (int i = 0; i < candidateLabels[k].size(); i++) {
+			unaryCosts[k][i] = PatchMatchSlantedPlaneCost(yc, xc, candidateLabels[k][i], -1);
+		}
+	}
 }
 
 void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
@@ -302,7 +380,7 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 	ConstructNeighboringGraph(numRows, numCols, vertexCoordsL, triVertexIndsL, baryCentersL, nbIndicesL);
 	//ConstructNeighboringGraph(numRows, numCols, vertexCoordsR, triVertexIndsR, baryCentersR, nbIndicesR);
 
-	std::vector<std::vector<cv::Point2d>> triPixelListsL, triPixelListsR;
+	std::vector<std::vector<cv::Point2i>> triPixelListsL, triPixelListsR;
 	DeterminePixelOwnership(numRows, numCols, vertexCoordsL, triVertexIndsL, triPixelListsL);
 	//DeterminePixelOwnership(numRows, numCols, vertexCoordsR, triVertexIndsR, triPixelListsR);
 
@@ -361,7 +439,7 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 
 	
 
-	for (int round = 0; round < MAXPATCHMATCHITERS; round++) {
+	for (int round = 0; round < 2/*MAXPATCHMATCHITERS*/; round++) {
 
 		//#pragma omp parallel for
 		for (int i = 0; i < numTrianglesL; i++) {
@@ -374,16 +452,24 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 			PropagateAndRandomSearch(id, +1, maxDisp, baryCentersR[id], slantedPlanesR, bestCostsR, nbIndicesR);
 		}*/
 
-		cv::Mat dispL = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanesL, triPixelListsL);
-		std::vector<std::pair<std::string, void*>> auxParams;
-		auxParams.push_back(std::pair<std::string, void*>("triImg", &triImgL));
-		//auxParams.push_back(std::pair<std::string, void*>("slantedPlanesL", &slantedPlanesL));
-		EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
+		//cv::Mat dispL = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanesL, triPixelListsL);
+		//std::vector<std::pair<std::string, void*>> auxParams;
+		//auxParams.push_back(std::pair<std::string, void*>("triImg", &triImgL));
+		////auxParams.push_back(std::pair<std::string, void*>("slantedPlanesL", &slantedPlanesL));
+		//EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
 
 		std::reverse(idListL.begin(), idListL.end());
 		std::reverse(idListR.begin(), idListR.end());
 	}
 
+	std::vector<std::vector<SlantedPlane>> candidateLabels;
+	std::vector<std::vector<float>> unaryCosts;
+	GenerateMeshStereoCandidateLabels(numRows, numCols, numDisps, 
+		baryCentersL, slantedPlanesL, vertexCoordsL, triVertexIndsL, nbIndicesL, candidateLabels, unaryCosts);
+	BP bp;
+	bp.InitFromTriangulation(numRows, numCols, numDisps, candidateLabels, unaryCosts, vertexCoordsL, triVertexIndsL, triPixelListsL, imL);
+	std::vector<int> outLabels;
+	bp.Run(rootFolder, outLabels);
 	
 }
 

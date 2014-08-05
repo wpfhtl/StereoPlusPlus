@@ -5,15 +5,26 @@
 #include <cassert>
 #include <ctime>
 #include <vector>
+#include <set>
 #include <algorithm>
 
 #include "MCImg.h"
 #include "StereoAPI.h"
+#include "BPOnFactorGraph.h"
 
 
 
 #define		PAIRWISECUTOFF		5
 #define		LAMBDA				0.001f
+
+#define		BOOL_SPLIT			1
+#define		BOOL_NOTSPLIT		0
+
+#define		TAU1				0.01
+#define		TAU2				0.1
+#define		TAU3				0.1
+
+
 
 #define ASSERT(condition)								\
 	if (!(condition)) {									\
@@ -21,61 +32,6 @@
 			#condition, __LINE__, __FILE__);			\
 		exit(-1);										\
 	}
-
-typedef std::vector<float> Message;
-typedef std::vector<float> Probs;
-
-struct VarNode
-{
-	int						cardinality;
-	std::vector<float>		pot;
-	std::vector<int>		factorNbs;
-	std::vector<Message>	msgNVarToFactor;
-};
-
-struct FactorNode
-{
-	int						cardinality;
-	std::vector<int>		varNbs;
-	std::vector<Message>	msgMFactorToVar;
-	std::vector<int>		bases;
-};
-
-class BP
-{
-public:
-	std::vector<VarNode>	varNodes;
-	std::vector<FactorNode> factorNodes;
-	std::vector<Probs>		allBeliefs;
-
-public:
-
-	void BP::Run(std::string rootFolder, std::vector<int> &outLabels, int maxIters = 2000, float tol = 1e-4);
-
-	void UpdateMessageNVarToFactor(int i, int alpha);
-
-	void UpdateMessageMFactorToVar(int alpha, int i);
-
-	std::vector<float>& MsgRefN(int i, int alpha);
-
-	std::vector<float>& MsgRefM(int alpha, int i);
-
-	int LocalIdxInNbs(std::vector<int> &arr, int val);
-
-	std::vector<int> LinearIdToConfig(int linearStateId, int factorId);
-
-	void NormalizeMessage(Message &msg);
-
-	void NormalizeBelief(Probs &p);
-
-	float SmoothnessCost(std::vector<int> &varInds, std::vector<int> &config);
-
-	void InitForGridGraph(MCImg<float> &unaryCosts);
-};
-
-
-
-
 
 
 
@@ -197,8 +153,14 @@ void BP::Run(std::string rootFolder, std::vector<int> &outLabels, int maxIters, 
 		printf("maxBeliefDiff = %lf\n", maxBeliefDiff);
 		printf("%.2fs\n", (clock() - tic) / 1000.f);
 
-		cv::Mat dispL = DecodeDisparityFromBeliefs(numRows, numCols, allBeliefs);
-		EvaluateDisparity(rootFolder, dispL);
+		/*cv::Mat dispL = DecodeDisparityFromBeliefs(numRows, numCols, allBeliefs);
+		EvaluateDisparity(rootFolder, dispL);*/
+		cv::Mat splitImg = DecodeSplittingImageFromBeliefs(numRows, numCols, allBeliefs);
+		cv::imshow("slitImg", splitImg);
+		cv::waitKey(0);
+		//printf("enter any thing:");
+		//int tmp;
+		//scanf("%d", &tmp);
 	}
 }
 
@@ -223,10 +185,11 @@ void BP::UpdateMessageMFactorToVar(int alpha, int i)
 	std::fill(mAlpha2i.begin(), mAlpha2i.end(), FLT_MAX);
 	const int iLocalIdx = LocalIdxInNbs(factorNodes[alpha].varNbs, i);
 
-	for (int id = 0; id < factorNodes[alpha].cardinality; id++) {
+	for (int id = 0; id < factorNodes[alpha].numConfigs; id++) {
 		std::vector<int> config = LinearIdToConfig(id, alpha);
 		int xi = config[iLocalIdx];
-		float newMAlpha2iAtxi = SmoothnessCost(factorNodes[alpha].varNbs, config);
+		/*float newMAlpha2iAtxi = SmoothnessCost(factorNodes[alpha].varNbs, config);*/
+		float newMAlpha2iAtxi = FactorPotential(factorNodes[alpha].varNbs, config);
 
 		for (int k = 0; k < factorNodes[alpha].varNbs.size(); k++) {
 			int j = factorNodes[alpha].varNbs[k];
@@ -301,6 +264,56 @@ float BP::SmoothnessCost(std::vector<int> &varInds, std::vector<int> &config)
 	return LAMBDA * std::min(PAIRWISECUTOFF, std::abs(config[0] - config[1]));
 }
 
+float TangentPlaneDist(SlantedPlane &p, SlantedPlane &q, cv::Point2d &Xp, cv::Point2d &Xq)
+{
+	const float cutoff = 15.0;
+	float Dp  = p.ToDisparity(Xp.y, Xp.x);
+	float Dq  = q.ToDisparity(Xq.y, Xq.y);
+	float Dpq = p.ToDisparity(Xq.y, Xq.y);
+	float Dqp = q.ToDisparity(Xp.y, Xp.x);
+	return 0.5 * (std::min(cutoff, std::abs(Dq - Dpq)) + std::min(cutoff, std::abs(Dp - Dqp)));
+}
+
+float BP::FactorPotential(std::vector<int> &varInds, std::vector<int> &config)
+{
+	//return 0;
+	ASSERT(config.size() == 2 || config.size() == 3)
+	const cv::Point2d halfOffset(0.5, 0.5);
+	if (config.size() == 2) {
+		int numPrivateVertices = candidateLabels.size();	// for clarity.
+		if (varInds[0] < numPrivateVertices) {
+			ASSERT(varInds[1] < numPrivateVertices)
+			return TangentPlaneDist(candidateLabels[varInds[0]][config[0]], candidateLabels[varInds[1]][config[1]],
+				varCoords[varInds[0]] - halfOffset, varCoords[varInds[1]] - halfOffset);
+		}
+		else {
+			return TAU2 * (config[0] == config[1] ? 0 : 1);
+		}
+	}
+	else {
+		if (config[2] == BOOL_SPLIT) {
+			return 0.f;
+		}
+		else {
+			ASSERT(varInds[0] < varCoords.size())
+			if (varInds[0] >= candidateLabels.size()) {
+				printf("varInds[0] = %d\n", varInds[0]);
+				printf("varInds[1] = %d\n", varInds[1]);
+				printf("varInds[2] = %d\n", varInds[2]);
+				printf("candidateLabels.size() = %d\n", candidateLabels.size());
+			}
+			ASSERT(varInds[0] < candidateLabels.size())
+			ASSERT(varInds[1] < candidateLabels.size())
+			cv::Point2d &p = varCoords[varInds[0]] - halfOffset;
+			float d1 = candidateLabels[varInds[0]][config[0]].ToDisparity(p.y, p.x);
+			float d2 = candidateLabels[varInds[1]][config[1]].ToDisparity(p.y, p.x);
+			return TAU3 * (std::abs(d1 - d2) > 1e-4);
+		}
+	}
+	ASSERT(0) // You would never reach here.
+	return 0;
+}
+
 enum FactorType { LIEONHORIZONTAL, LIEONVERTICAL };
 
 static int GetFactorId(int y, int x, int numRows, int numCols, FactorType factorType)
@@ -314,7 +327,7 @@ static int GetFactorId(int y, int x, int numRows, int numCols, FactorType factor
 	}
 }
 
-void BP::InitForGridGraph(MCImg<float> &unaryCosts)
+void BP::InitFromGridGraph(MCImg<float> &unaryCosts)
 {
 	// Factor node ID coding scheme: there are two types of factor nodes on grid graph.
 	// Fist type lies on horizontal connection, second type lies on vertical connection.
@@ -338,7 +351,7 @@ void BP::InitForGridGraph(MCImg<float> &unaryCosts)
 	varNodes.resize(numRows * numCols);
 	for (int y = 0, id = 0; y < numRows; y++) {
 		for (int x = 0; x < numCols; x++, id++) {
-			varNodes[id].cardinality = numDisps;
+			varNodes[id].numLabels = numDisps;
 			varNodes[id].pot = std::vector<float>(unaryCosts.get(y, x), unaryCosts.get(y, x) + numDisps);
 
 			if (x > 0)			 varNodes[id].factorNbs.push_back(GetFactorId(y, x - 1, numRows, numCols, LIEONHORIZONTAL));
@@ -365,7 +378,7 @@ void BP::InitForGridGraph(MCImg<float> &unaryCosts)
 	// Horizontal factors
 	for (int y = 0; y < numRows; y++) {
 		for (int x = 0; x < numCols - 1; x++, id++) {
-			factorNodes[id].cardinality = numDisps * numDisps;
+			factorNodes[id].numConfigs = numDisps * numDisps;
 			factorNodes[id].bases = commonBases;
 			factorNodes[id].varNbs.push_back(y * numCols + x);
 			factorNodes[id].varNbs.push_back(y * numCols + x + 1);
@@ -377,7 +390,7 @@ void BP::InitForGridGraph(MCImg<float> &unaryCosts)
 	printf("step 3.2 ...\n");
 	for (int y = 0; y < numRows - 1; y++) {
 		for (int x = 0; x < numCols; x++, id++) {
-			factorNodes[id].cardinality = numDisps * numDisps;
+			factorNodes[id].numConfigs = numDisps * numDisps;
 			factorNodes[id].bases = commonBases;
 			factorNodes[id].varNbs.push_back(      y * numCols + x);
 			factorNodes[id].varNbs.push_back((y + 1) * numCols + x);
@@ -387,6 +400,234 @@ void BP::InitForGridGraph(MCImg<float> &unaryCosts)
 	}
 
 	printf("done.\n");
+}
+
+void BP::InitFromTriangulation(int numRows, int numCols, int numDisps,
+	std::vector<std::vector<SlantedPlane>> &candidateLabels, std::vector<std::vector<float>> &unaryCosts,
+	std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
+	std::vector<std::vector<cv::Point2i>> &triPixelList, cv::Mat &img)
+{
+	int numTriangles = triVertexInds.size();
+	int numPrivateVertices = 3 * numTriangles;
+	int numSplitNodes = vertexCoords.size();
+
+	MCImg<std::vector<std::pair<int, int>>> triIndSets(numRows + 1, numCols + 1);
+	for (int id = 0; id < numTriangles; id++) {
+		for (int j = 0; j < 3; j++) {
+			cv::Point2d &p = vertexCoords[triVertexInds[id][j]];
+			triIndSets[p.y][(int)p.x].push_back(std::make_pair(id, j));
+		}
+	}
+
+	std::vector<std::set<int>> splitNodeNbIndSets(numSplitNodes);
+	for (int id = 0; id < numTriangles; id++) {
+		std::vector<int> &vertexIds = triVertexInds[id];
+		for (int i = 0; i < 3; i++) {
+			for (int j = i + 1; j < 3; j++) {
+				splitNodeNbIndSets[vertexIds[i]].insert(vertexIds[j]);
+				splitNodeNbIndSets[vertexIds[j]].insert(vertexIds[i]);
+			}
+		}
+	}
+	std::vector<std::vector<int>> splitNodeNbInds(numSplitNodes);
+	for (int i = 0; i < numSplitNodes; i++) {
+		std::set<int> &nbSet = splitNodeNbIndSets[i];
+		splitNodeNbInds[i] = std::vector<int>(nbSet.begin(), nbSet.end());
+	}
+
+
+
+	// Step 2 - Initialize var nodes and beliefs
+	varNodes.resize(numPrivateVertices + numSplitNodes);
+	printf("Step 2.1 - Prepare unary costs for varNodes ...\n");
+	for (int id = 0; id < numTriangles; id++) {
+		for (int j = 0; j < 3; j++) {
+			varNodes[3 * id + j].numLabels = unaryCosts[3 * id + j].size();
+			varNodes[3 * id + j].pot = unaryCosts[3 * id + j];
+		}
+	}
+
+	std::vector<float> constSplitPot;
+	constSplitPot.push_back(0.f);
+	constSplitPot.push_back(TAU1);
+	for (int i = 0; i < numSplitNodes; i++) {
+		varNodes[numPrivateVertices + i].numLabels = 2;
+		varNodes[numPrivateVertices + i].pot = constSplitPot;
+	}
+
+	allBeliefs.resize(varNodes.size());
+	for (int i = 0; i < varNodes.size(); i++) {
+		allBeliefs[i] = Probs(varNodes[i].numLabels, 1.f / varNodes[i].numLabels);
+	}
+
+	// Step 3 - Initialize factor nodes
+
+
+	//FIXME: pre-calculate the number of factor nodes, and resize factorNodes.
+	int numType1Factors = 3 * numTriangles;
+	int numType2Factors = 0;
+	for (int id = 0; id < splitNodeNbInds.size(); id++) {
+		for (int k = 0; k < splitNodeNbInds[id].size(); k++) {
+			int nbId = splitNodeNbInds[id][k];
+			if (id < nbId) {
+				numType2Factors++;
+			}
+		}
+	}
+	int numType3Factors = 0;
+	for (int id = 0; id < vertexCoords.size(); id++) {
+		int y = vertexCoords[id].y;
+		int x = vertexCoords[id].x;
+		std::vector<std::pair<int, int>> &triIds = triIndSets[y][x];
+		int groupSize = triIds.size();
+		if (groupSize >= 2) {
+			numType3Factors += groupSize;
+		}
+	}
+	factorNodes.resize(numType1Factors + numType2Factors + numType3Factors);
+
+
+
+	printf("Step 3.1 - each pair of private vertex from the same triangle has a factor ...\n");
+	int numPairwiseVertexFactors = 0;
+	for (int id = 0; id < numTriangles; id++) {
+		for (int j = 0; j < 3; j++) {
+			int curFactorIdx = numPairwiseVertexFactors;
+			int varIdx1 = 3 * id + j;
+			int varIdx2 = 3 * id + (j + 1) % 3;
+			int numLabels1 = varNodes[varIdx1].numLabels;
+			int numLabels2 = varNodes[varIdx2].numLabels;
+
+			factorNodes[curFactorIdx].numConfigs = numLabels1 * numLabels2;
+			factorNodes[curFactorIdx].varNbs.push_back(varIdx1);
+			factorNodes[curFactorIdx].varNbs.push_back(varIdx2);
+			factorNodes[curFactorIdx].bases.push_back(numLabels2);
+			factorNodes[curFactorIdx].bases.push_back(1);
+			factorNodes[curFactorIdx].msgMFactorToVar.push_back(Message(numLabels1, 0.f));
+			factorNodes[curFactorIdx].msgMFactorToVar.push_back(Message(numLabels2, 0.f));
+
+			varNodes[varIdx1].factorNbs.push_back(curFactorIdx);
+			varNodes[varIdx2].factorNbs.push_back(curFactorIdx);
+			varNodes[varIdx1].msgNVarToFactor.push_back(Message(numLabels1, 0.f));
+			varNodes[varIdx2].msgNVarToFactor.push_back(Message(numLabels2, 0.f));
+
+			numPairwiseVertexFactors++;
+		}
+	}
+
+	printf("Step 3.2 - each pair of neighboring split nodes has a factor ...\n");
+	int numPairwiseSplitFactors = 0;
+	for (int id = 0; id < splitNodeNbInds.size(); id++) {
+		for (int k = 0; k < splitNodeNbInds[id].size(); k++) {
+			int nbId = splitNodeNbInds[id][k];
+			if (id < nbId) {
+				int varIdx1 = numPrivateVertices + id;
+				int varIdx2 = numPrivateVertices + nbId;
+				int curFactorIdx = numPairwiseVertexFactors + numPairwiseSplitFactors;
+
+				factorNodes[curFactorIdx].numConfigs = 4;
+				factorNodes[curFactorIdx].varNbs.push_back(varIdx1);
+				factorNodes[curFactorIdx].varNbs.push_back(varIdx2);
+				factorNodes[curFactorIdx].bases.push_back(2);
+				factorNodes[curFactorIdx].bases.push_back(1);
+				factorNodes[curFactorIdx].msgMFactorToVar.push_back(Message(2, 0.f));
+				factorNodes[curFactorIdx].msgMFactorToVar.push_back(Message(2, 0.f));
+
+				varNodes[varIdx1].factorNbs.push_back(curFactorIdx);
+				varNodes[varIdx2].factorNbs.push_back(curFactorIdx);
+				varNodes[varIdx1].msgNVarToFactor.push_back(Message(2, 0.f));
+				varNodes[varIdx2].msgNVarToFactor.push_back(Message(2, 0.f));
+
+				numPairwiseSplitFactors++;
+			}
+		}
+	}
+
+	printf("Step 3.3 - each group indexed by the vertex position has N triple factor"
+		"where N is the group size.\n");
+	int numTripleCliqueFactors = 0;
+	for (int id = 0; id < vertexCoords.size(); id++) {
+		int y = vertexCoords[id].y;
+		int x = vertexCoords[id].x;
+		std::vector<std::pair<int, int>> &triIds = triIndSets[y][x];
+		int groupSize = triIds.size();
+
+		if (groupSize >= 2) {
+			for (int k = 0; k < groupSize; k++) {
+				int k1 = k, k2 = (k + 1) % groupSize;
+				int varIdx1 = 3 * triIds[k1].first + triIds[k1].second;
+				int varIdx2 = 3 * triIds[k2].first + triIds[k2].second;
+				int varIdx3 = numPrivateVertices + id;
+				int curFactorIdx = numPairwiseVertexFactors + numPairwiseSplitFactors + numTripleCliqueFactors;
+				int numLabels1 = varNodes[varIdx1].numLabels;
+				int numLabels2 = varNodes[varIdx2].numLabels;
+				int numLabels3 = varNodes[varIdx3].numLabels;
+
+				factorNodes[curFactorIdx].numConfigs = numLabels1 * numLabels2 * numLabels3;
+				factorNodes[curFactorIdx].bases.push_back(numLabels2 * numLabels3);
+				factorNodes[curFactorIdx].bases.push_back(numLabels3);
+				factorNodes[curFactorIdx].bases.push_back(1);
+				factorNodes[curFactorIdx].varNbs.push_back(varIdx1);
+				factorNodes[curFactorIdx].varNbs.push_back(varIdx2);
+				factorNodes[curFactorIdx].varNbs.push_back(varIdx3);
+				factorNodes[curFactorIdx].msgMFactorToVar.push_back(Message(numLabels1, 0.f));
+				factorNodes[curFactorIdx].msgMFactorToVar.push_back(Message(numLabels2, 0.f));
+				factorNodes[curFactorIdx].msgMFactorToVar.push_back(Message(numLabels3, 0.f));
+
+				varNodes[varIdx1].factorNbs.push_back(curFactorIdx);
+				varNodes[varIdx2].factorNbs.push_back(curFactorIdx);
+				varNodes[varIdx3].factorNbs.push_back(curFactorIdx);
+				varNodes[varIdx1].msgNVarToFactor.push_back(Message(numLabels1, 0.f));
+				varNodes[varIdx2].msgNVarToFactor.push_back(Message(numLabels2, 0.f));
+				varNodes[varIdx3].msgNVarToFactor.push_back(Message(numLabels3, 0.f));
+
+				numTripleCliqueFactors++;
+			}
+		}
+	}
+
+	printf("INIT: candidateLabels.size() = %d\n", candidateLabels.size());
+	this->candidateLabels = candidateLabels;
+	this->varCoords.resize(3 * numTriangles);
+	for (int id = 0; id < numTriangles; id++) {
+		varCoords[3 * id + 0] = vertexCoords[triVertexInds[id][0]];
+		varCoords[3 * id + 1] = vertexCoords[triVertexInds[id][1]];
+		varCoords[3 * id + 2] = vertexCoords[triVertexInds[id][2]];
+	}
+	varCoords.insert(varCoords.end(), vertexCoords.begin(), vertexCoords.end());
+	
+	/*for (int id = 0; id < numTriangles; id++) {
+		std::vector<cv::Point2i> &coordList = triPixelList[id];
+		float R = 0, G = 0, B = 0;
+		for (int i = 0; i < coordList.size(); i++) {
+			cv::Vec3b &c = img.at<cv::Vec3b>(coordList[i].y, coordList[i].x);
+			B += c[0];
+			G += c[1];
+			R += c[2];
+		}
+		R /= coordList.size();
+		G /= coordList.size();
+		B /= coordList.size();
+		cv::Vec3b meanColor(B, G, R);
+		triMeanColors[3 * id + 0] = meanColor;
+		triMeanColors[3 * id + 1] = meanColor;
+		triMeanColors[3 * id + 2] = meanColor;
+	}*/
+
+}
+
+cv::Mat BP::DecodeSplittingImageFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs)
+{
+	cv::Mat canvas(numRows, numCols, CV_8UC3);
+	canvas.setTo(cv::Vec3b(0, 0, 0));
+	int numPrivateVertices = this->candidateLabels.size();
+	for (int i = numPrivateVertices; i < varCoords.size(); i++) {
+		if (allBeliefs[i][1] < allBeliefs[i][0]) {
+			cv::Point2d p = varCoords[i];
+			cv::circle(canvas, p - cv::Point2d(0.5, 0.5), 1.5, cv::Scalar(0, 0, 255), 2);
+		}
+	}
+	return canvas;
 }
 
 void TestLBPOnFactorGraph()
@@ -408,7 +649,7 @@ void TestLBPOnFactorGraph()
 #else
 	BP bp;
 	std::vector<int> outLabels;
-	bp.InitForGridGraph(unaryCosts);
+	bp.InitFromGridGraph(unaryCosts);
 	bp.Run("tsukuba", outLabels);
 #endif
 }
