@@ -198,3 +198,44 @@ void OnMouseTestSelfSimilarityPropagation(int event, int x, int y, int flags, vo
 
 	cv::imshow("TestSelfSimilarityPropagation", tmp);
 }
+
+void OnMouseMeshStereoOnFactorGraph(int event, int x, int y, int flags, void *param)
+{
+	if (event == CV_EVENT_LBUTTONDBLCLK) {
+		std::vector<std::pair<std::string, void*>> &auxParams
+			= *(std::vector<std::pair<std::string, void*>>*)((void**)param)[0];
+		cv::Mat &imL			= *(cv::Mat*)((void**)param)[3 + 1];
+		int numDisps			= *(int*)((void**)param)[8 + 1];
+		int maxDisp				= numDisps - 1;
+		std::string workingDir	= *(std::string*)((void**)param)[10 + 1];
+
+		ASSERT(auxParams[0].first == "vertexCoords")
+		ASSERT(auxParams[1].first == "triVertexInds")
+		ASSERT(auxParams[2].first == "triVertexBestLabels")
+		ASSERT(auxParams[3].first == "splitMap")
+
+		std::vector<cv::Point2d>				&vertexCoords = *(std::vector<cv::Point2d>*)auxParams[0].second;
+		std::vector<std::vector<int>>			&triVertexInds = *(std::vector<std::vector<int>>*)auxParams[1].second;
+		std::vector<std::vector<SlantedPlane>>	&triVertexBestLabels = *(std::vector<std::vector<SlantedPlane>>*)auxParams[2].second;
+		cv::Mat									&splitMap = *(cv::Mat*)auxParams[3].second;
+
+		std::string plyFilePath = workingDir + "/OnMouseMeshStereoMesh.ply";
+		std::string cmdInvokeMeshlab = "meshlab " + plyFilePath;
+		std::string textureFilePath = workingDir + "/im2.png";
+
+		void SaveMeshStereoResultToPly(cv::Mat &img, float maxDisp,
+			std::string workingDir, std::string plyFilePath, std::string textureFilePath,
+			std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
+			std::vector<std::vector<SlantedPlane>> &triVertexBestLabels, cv::Mat &splitMap);
+		SaveMeshStereoResultToPly(imL, maxDisp, workingDir, plyFilePath, textureFilePath,
+			vertexCoords, triVertexInds, triVertexBestLabels, splitMap);
+		system(cmdInvokeMeshlab.c_str());
+
+		return;
+	}
+
+
+	cv::Mat tmpCanvas = (*(cv::Mat*)((void**)param)[1]).clone();
+	OnMouseEvaluateDisparityDefaultDrawing(event, x, y, flags, (void*)((void**)param + 1), tmpCanvas);
+	cv::imshow("OnMouseMeshStereoOnFactorGraph", tmpCanvas);
+}

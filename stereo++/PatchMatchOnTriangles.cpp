@@ -331,6 +331,15 @@ static void GenerateMeshStereoCandidateLabels(int numRows, int numCols, int numD
 				}
 				meanDisp /= (float)triIds.size();
 
+				// Label from its own normal and the shared disparity
+				for (int k = 0; k < triIds.size(); k++) {
+					int id = triIds[k].first;
+					SlantedPlane &p = slantedPlanes[id];
+					SlantedPlane candidate = SlantedPlane::ConstructFromNormalDepthAndCoord(
+						p.nx, p.ny, p.nz, meanDisp, y - 0.5, x - 0.5);
+					candidateLabels[3 * id + triIds[k].second].push_back(candidate);
+				}
+
 				float zRadius = (numDisps - 1) / 2.f;
 				float nRadius = 1.f;
 				while (zRadius >= 0.1f) {
@@ -340,7 +349,8 @@ static void GenerateMeshStereoCandidateLabels(int numRows, int numCols, int numD
 						float nx = slantedPlanes[id].nx + nRadius * (((float)rand() - RAND_HALF) / RAND_HALF);
 						float ny = slantedPlanes[id].ny + nRadius * (((float)rand() - RAND_HALF) / RAND_HALF);
 						float nz = slantedPlanes[id].nz + nRadius * (((float)rand() - RAND_HALF) / RAND_HALF);
-						SlantedPlane candidate = SlantedPlane::ConstructFromNormalDepthAndCoord(nx, ny, nz, zNew, y - 0.5f, x - 0.5f);
+						SlantedPlane candidate = SlantedPlane::ConstructFromNormalDepthAndCoord(
+							nx, ny, nz, zNew, y - 0.5f, x - 0.5f);
 						candidateLabels[3 * id + triIds[k].second].push_back(candidate);
 					}
 					zRadius /= 2.f;
@@ -439,9 +449,10 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 
 	
 
-	for (int round = 0; round < 2/*MAXPATCHMATCHITERS*/; round++) {
+	for (int round = 0; round < 4/*MAXPATCHMATCHITERS*/; round++) {
 
 		//#pragma omp parallel for
+		printf("PatchMatchOnTriangles round %d ...\n", round);
 		for (int i = 0; i < numTrianglesL; i++) {
 			int id = idListL[i];
 			PropagateAndRandomSearch(id, -1, maxDisp, baryCentersL[id], slantedPlanesL, bestCostsL, nbIndicesL);
@@ -475,7 +486,14 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 
 void TestPatchMatchOnTriangles()
 {
-	std::string rootFolder = "Baby1";
+	char textBuf[1024];
+	FILE *fid = fopen("d:/data/TAU.txt", "r");
+	for (int i = 0; i < 5; i++) {
+		fgets(textBuf, 1000, fid);
+	}
+	fscanf(fid, "%s", textBuf);
+	fclose(fid);
+	std::string rootFolder(textBuf);
 
 	cv::Mat imL = cv::imread("D:/data/stereo/" + rootFolder + "/im2.png");
 	cv::Mat imR = cv::imread("D:/data/stereo/" + rootFolder + "/im6.png");

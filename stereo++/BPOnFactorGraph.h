@@ -92,6 +92,7 @@ public:
 	std::vector<cv::Vec3b>					triMeanColors;
 	std::vector<cv::Point2d>				vertexCoords;
 	std::vector<std::vector<int>>			triVertexInds;
+	std::vector<std::vector<cv::Point2i>>   triPixelList;
 
 public:
 	void InitFromTriangulation(int numRows, int numCols, int numDisps,
@@ -101,7 +102,12 @@ public:
 
 	float FactorPotential(std::vector<int> &varInds, std::vector<int> &config);
 
+	cv::Mat DecodeSplitMapFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs);
+
 	cv::Mat DecodeSplittingImageFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs);
+
+	cv::Mat MeshStereoBPOnFG::DecodeDisparityMapFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs,
+		std::vector<std::vector<SlantedPlane>> &triVertexBestLabels, int subId);
 
 	void Run(std::string rootFolder, int maxIters = 200, float tol = 1e-4);
 };

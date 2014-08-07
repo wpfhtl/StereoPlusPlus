@@ -1,4 +1,4 @@
- #include <opencv2/core/core.hpp>
+#include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
@@ -375,11 +375,13 @@ void InitalizeTau()
 	fscanf(fid, "TANGENT_CUTOFF = %f", &TANGENT_CUTOFF);
 	fclose(fid);
 
+	printf("\n");
 	printf("TAU1           = %f\n", TAU1);
 	printf("TAU2           = %f\n", TAU2);
 	printf("TAU3           = %f\n", TAU3);
 	printf("TANGENT_LAMBDA = %f\n", TANGENT_LAMBDA);
 	printf("TANGENT_CUTOFF = %f\n", TANGENT_CUTOFF);
+	printf("\n");
 }
 
 void MeshStereoBPOnFG::InitFromTriangulation(int numRows, int numCols, int numDisps,
@@ -579,6 +581,7 @@ void MeshStereoBPOnFG::InitFromTriangulation(int numRows, int numCols, int numDi
 	varCoords.insert(varCoords.end(), vertexCoords.begin(), vertexCoords.end());
 	this->vertexCoords = vertexCoords;
 	this->triVertexInds = triVertexInds;
+	this->triPixelList = triPixelList;
 	
 	/*for (int id = 0; id < numTriangles; id++) {
 		std::vector<cv::Point2i> &coordList = triPixelList[id];
@@ -651,9 +654,25 @@ float MeshStereoBPOnFG::FactorPotential(std::vector<int> &varInds, std::vector<i
 		return 0;
 }
 
+cv::Mat MeshStereoBPOnFG::DecodeSplitMapFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs)
+{
+	cv::Mat splitMap(numRows + 1, numCols + 1, CV_8UC1);
+	splitMap.setTo((bool)0);
+
+	int numPrivateVertices = this->candidateLabels.size();
+	for (int i = numPrivateVertices; i < varCoords.size(); i++) {
+		if (allBeliefs[i][1] < allBeliefs[i][0]) {
+			cv::Point2d p = varCoords[i];
+			splitMap.at<bool>(p.y, p.x) = true;
+		}
+	}
+
+	return splitMap;
+}
+
 cv::Mat MeshStereoBPOnFG::DecodeSplittingImageFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs)
 {
-	cv::Mat splitMap(numRows + 1, numCols + 1, CV_32SC1);
+	cv::Mat splitMap(numRows + 1, numCols + 1, CV_8UC1);
 	splitMap.setTo((bool)0);
 	cv::Mat canvas(numRows, numCols, CV_8UC3);
 	canvas.setTo(cv::Vec3b(0, 0, 0));
@@ -688,6 +707,35 @@ cv::Mat MeshStereoBPOnFG::DecodeSplittingImageFromBeliefs(int numRows, int numCo
 	return canvas;
 }
 
+cv::Mat MeshStereoBPOnFG::DecodeDisparityMapFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs,
+	std::vector<std::vector<SlantedPlane>> &triVertexBestLabels, int subId)
+{
+	cv::Mat dispMap(numRows, numCols, CV_32FC1);
+	int numTriangles = triVertexInds.size();
+	triVertexBestLabels.resize(3 * numTriangles);
+
+	for (int id = 0; id < numTriangles; id++) {
+		Probs &belief = allBeliefs[3 * id + subId];
+		int minIdx = std::min_element(belief.begin(), belief.end()) - belief.begin();
+		SlantedPlane bestLabel = candidateLabels[3 * id + subId][minIdx];
+		for (int i = 0; i < triPixelList[id].size(); i++) {
+			int y = triPixelList[id][i].y;
+			int x = triPixelList[id][i].x;
+			dispMap.at<float>(y, x) = bestLabel.ToDisparity(y, x);
+		}
+	}
+
+	for (int id = 0; id < numTriangles; id++) {
+		for (int j = 0; j < 3; j++) {
+			Probs &belief = allBeliefs[3 * id + j];
+			int minIdx = std::min_element(belief.begin(), belief.end()) - belief.begin();
+			triVertexBestLabels[id].push_back(candidateLabels[3 * id + j][minIdx]);
+		}
+	}
+
+	return dispMap;
+}
+
 void MeshStereoBPOnFG::Run(std::string rootFolder, int maxIters, float tol)
 {
 	cv::Mat imL = cv::imread("d:/data/stereo/" + rootFolder + "/im2.png");
@@ -695,9 +743,22 @@ void MeshStereoBPOnFG::Run(std::string rootFolder, int maxIters, float tol)
 
 	for (int iter = 0; iter < maxIters; iter++) {
 		float maxBeliefDiff = RunNextIteration();
+		cv::Mat splitMap = DecodeSplitMapFromBeliefs(numRows, numCols, allBeliefs);
 		cv::Mat splitImg = DecodeSplittingImageFromBeliefs(numRows, numCols, allBeliefs);
-		cv::imshow("splitImg", splitImg);
-		cv::waitKey(0);
+
+		std::vector<std::vector<SlantedPlane>> triVertexBestLabels;
+		cv::Mat dispL = DecodeDisparityMapFromBeliefs(numRows, numCols, allBeliefs, triVertexBestLabels, 1);
+	
+
+		std::vector<std::pair<std::string, void*>> auxParams;
+		auxParams.push_back(std::pair<std::string, void*>("triImg", &splitImg));
+		auxParams.push_back(std::pair<std::string, void*>("vertexCoords", &vertexCoords));
+		auxParams.push_back(std::pair<std::string, void*>("triVertexInds", &triVertexInds));
+		auxParams.push_back(std::pair<std::string, void*>("triVertexBestLabels", &triVertexBestLabels));
+		auxParams.push_back(std::pair<std::string, void*>("splitMap", &splitMap));
+		EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams, "OnMouseMeshStereoOnFactorGraph");
+		
+		//EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
 		//EvaluateDisparity(rootFolder, dispL);
 		if (maxBeliefDiff < tol) {
 			printf("Beliefs has converged at maxBelifDiff = %f, exiting...\n", maxBeliefDiff);

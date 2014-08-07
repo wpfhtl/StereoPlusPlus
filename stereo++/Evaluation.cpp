@@ -59,6 +59,11 @@ void RegisterMouseCallbacks(std::string mouseCallbackName, void *callbackParams)
 		cv::setMouseCallback(mouseCallbackName, OnMouseLoopyBPOnGridGraph, callbackParams);
 		return;
 	}
+	if (mouseCallbackName == "OnMouseMeshStereoOnFactorGraph") {
+		void OnMouseMeshStereoOnFactorGraph(int event, int x, int y, int flags, void *param);
+		cv::setMouseCallback(mouseCallbackName, OnMouseMeshStereoOnFactorGraph, callbackParams);
+		return;
+	}
 	ASSERT(0)
 }
 
