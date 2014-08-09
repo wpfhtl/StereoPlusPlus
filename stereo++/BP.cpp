@@ -6,15 +6,16 @@
 #include "Timer.h"
 
 
-#define		SIMILARITYGAMMA		10
-#define		PAIRWISECUTOFF		5
-#define		LAMBDA				0.002f
+
 
 extern int					PATCHRADIUS;
 extern int					PATCHWIDTH;
 extern float				GRANULARITY;
+extern float				SIMILARITY_GAMMA;
+extern float				ISING_CUTOFF;
+extern float				ISING_LAMBDA;
 
-extern enum CostAggregationType { REGULAR_GRID, TOP50 };
+extern enum CostAggregationType { GRID, TOP50 };
 extern enum MatchingCostType	{ ADGRADIENT, ADCENSUS };
 
 extern CostAggregationType	gCostAggregationType;
@@ -32,7 +33,7 @@ static const cv::Point2i dirDelta[4] = { cv::Point2i(0, -1), cv::Point2i(-1, 0),
 
 static inline float PairwiseCost(int xs, int xt)
 {
-	return LAMBDA * std::min(PAIRWISECUTOFF, std::abs(xs - xt));
+	return ISING_LAMBDA * std::min((int)ISING_CUTOFF, std::abs(xs - xt));
 }
 
 static inline float *GetMessage(cv::Point2i &s, cv::Point2i &t, MCImg<float> &allMessages, int numDisps)
@@ -222,11 +223,11 @@ void RunLoopyBP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	std::vector<SimVector> simVecsStdL;
 	std::vector<SimVector> simVecsStdR;
 
-	if (gCostAggregationType == REGULAR_GRID) {
+	if (gCostAggregationType == GRID) {
 		bs::Timer::Tic("Precompute Similarity Weights");
 		MCImg<float> PrecomputeSimilarityWeights(cv::Mat &img, int patchRadius, int simGamma);
-		gSimWeightsL = PrecomputeSimilarityWeights(imL, PATCHRADIUS, SIMILARITYGAMMA);
-		//gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITYGAMMA);
+		gSimWeightsL = PrecomputeSimilarityWeights(imL, PATCHRADIUS, SIMILARITY_GAMMA);
+		//gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITY_GAMMA);
 		bs::Timer::Toc();
 	}
 	else if (gCostAggregationType == TOP50) {

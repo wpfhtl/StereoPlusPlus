@@ -11,14 +11,15 @@
 #include "BPOnFactorGraph.h"
 
 
-#define SIMILARITYGAMMA			10
-#define MAXPATCHMATCHITERS		15
 
 extern int					PATCHRADIUS;
 extern int					PATCHWIDTH;
 extern float				GRANULARITY;
+extern float				SIMILARITY_GAMMA;
+extern int					MAX_PATCHMATCH_ITERS;
+extern std::string			ROOTFOLDER;
 
-extern enum CostAggregationType { REGULAR_GRID, TOP50 };
+extern enum CostAggregationType { GRID, TOP50 };
 extern enum MatchingCostType	{ ADGRADIENT, ADCENSUS };
 
 extern CostAggregationType	gCostAggregationType;
@@ -411,11 +412,11 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 	std::vector<SimVector> simVecsStdL;
 	std::vector<SimVector> simVecsStdR;
 
-	if (gCostAggregationType == REGULAR_GRID) {
+	if (gCostAggregationType == GRID) {
 		bs::Timer::Tic("Precompute Similarity Weights");
 		MCImg<float> PrecomputeSimilarityWeights(cv::Mat &img, int patchRadius, int simGamma);
-		gSimWeightsL = PrecomputeSimilarityWeights(imL, PATCHRADIUS, SIMILARITYGAMMA);
-		//gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITYGAMMA);
+		gSimWeightsL = PrecomputeSimilarityWeights(imL, PATCHRADIUS, SIMILARITY_GAMMA);
+		//gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITY_GAMMA);
 		bs::Timer::Toc();
 	}
 	else if (gCostAggregationType == TOP50) {
@@ -449,7 +450,7 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 
 	
 
-	for (int round = 0; round < 4/*MAXPATCHMATCHITERS*/; round++) {
+	for (int round = 0; round < 4/*MAX_PATCHMATCH_ITERS*/; round++) {
 
 		//#pragma omp parallel for
 		printf("PatchMatchOnTriangles round %d ...\n", round);
@@ -486,14 +487,7 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 
 void TestPatchMatchOnTriangles()
 {
-	char textBuf[1024];
-	FILE *fid = fopen("d:/data/TAU.txt", "r");
-	for (int i = 0; i < 5; i++) {
-		fgets(textBuf, 1000, fid);
-	}
-	fscanf(fid, "%s", textBuf);
-	fclose(fid);
-	std::string rootFolder(textBuf);
+	std::string rootFolder = ROOTFOLDER;
 
 	cv::Mat imL = cv::imread("D:/data/stereo/" + rootFolder + "/im2.png");
 	cv::Mat imR = cv::imread("D:/data/stereo/" + rootFolder + "/im6.png");

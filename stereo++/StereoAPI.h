@@ -1,3 +1,7 @@
+#pragma once
+#ifndef __STEREOAPI_H__
+#define __STEREOAPI_H__
+
 #include <opencv2/core/core.hpp>
 #include "MCImg.h"
 #include "SlantedPlane.h"
@@ -52,3 +56,6 @@ void Triangulate2DImage(cv::Mat& img, std::vector<cv::Point2d> &vertexCoords, st
 cv::Mat DrawTriangleImage(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds);
 
 float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int sign);
+
+
+#endif

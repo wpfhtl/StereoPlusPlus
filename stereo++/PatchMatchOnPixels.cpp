@@ -7,14 +7,14 @@
 #include "SlantedPlane.h"
 
 
-#define SIMILARITYGAMMA			10
-#define MAXPATCHMATCHITERS		2
 
 extern int					PATCHRADIUS;
 extern int					PATCHWIDTH;
 extern float				GRANULARITY;
+extern float				SIMILARITY_GAMMA;
+extern int					MAX_PATCHMATCH_ITERS;
 
-extern enum CostAggregationType { REGULAR_GRID, TOP50 };
+extern enum CostAggregationType { GRID, TOP50 };
 extern enum MatchingCostType	{ ADGRADIENT, ADCENSUS };
 
 extern CostAggregationType	gCostAggregationType;
@@ -230,7 +230,7 @@ static void WeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixel
 					for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x++, id++) {
 						if (InBound(y, x, numRows, numCols)) {
 							cv::Vec3b &c = guideImg.at<cv::Vec3b>(y, x);
-							w[id] = exp(-L1Dist(center, c) / (float)SIMILARITYGAMMA);
+							w[id] = exp(-L1Dist(center, c) / (float)SIMILARITY_GAMMA);
 						}
 					}
 				}
@@ -267,10 +267,10 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 	std::vector<SimVector> simVecsStdL;
 	std::vector<SimVector> simVecsStdR;
 
-	if (gCostAggregationType == REGULAR_GRID) {
+	if (gCostAggregationType == GRID) {
 		bs::Timer::Tic("Precompute Similarity Weights");
-		gSimWeightsL = PrecomputeSimilarityWeights(imL, PATCHRADIUS, SIMILARITYGAMMA);
-		gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITYGAMMA);
+		gSimWeightsL = PrecomputeSimilarityWeights(imL, PATCHRADIUS, SIMILARITY_GAMMA);
+		gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITY_GAMMA);
 		bs::Timer::Toc();
 	}
 	else if (gCostAggregationType == TOP50) {
@@ -303,7 +303,7 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 
 
 	// Step 2 - Spatial propagation and random search
-	for (int round = 0; round < MAXPATCHMATCHITERS; round++) {
+	for (int round = 0; round < MAX_PATCHMATCH_ITERS; round++) {
 
 		bs::Timer::Tic("Left View");
 		#pragma omp parallel for

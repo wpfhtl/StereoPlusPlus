@@ -93,6 +93,7 @@ public:
 	std::vector<cv::Point2d>				vertexCoords;
 	std::vector<std::vector<int>>			triVertexInds;
 	std::vector<std::vector<cv::Point2i>>   triPixelList;
+	std::vector<std::vector<SlantedPlane>>	triVertexBestLabels;
 
 public:
 	void InitFromTriangulation(int numRows, int numCols, int numDisps,

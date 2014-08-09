@@ -3,6 +3,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include "StereoAPI.h"
+#include "BPOnFactorGraph.h"
 
 
 
@@ -201,24 +202,78 @@ void OnMouseTestSelfSimilarityPropagation(int event, int x, int y, int flags, vo
 
 void OnMouseMeshStereoOnFactorGraph(int event, int x, int y, int flags, void *param)
 {
+	std::vector<std::pair<std::string, void*>> &auxParams
+		= *(std::vector<std::pair<std::string, void*>>*)((void**)param)[0];
+	cv::Mat &imL			= *(cv::Mat*)((void**)param)[3 + 1];
+	int numDisps			= *(int*)((void**)param)[8 + 1];
+	int maxDisp				= numDisps - 1;
+	std::string workingDir	= *(std::string*)((void**)param)[10 + 1];
+
+	ASSERT(auxParams[0].first == "splitMap")
+	ASSERT(auxParams[1].first == "MeshStereoBPOnFGObject")
+
+	cv::Mat									&splitMap = *(cv::Mat*)auxParams[0].second;
+	MeshStereoBPOnFG						&bp = *(MeshStereoBPOnFG*)auxParams[1].second;
+	std::vector<cv::Point2d>				&vertexCoords = bp.vertexCoords;
+	std::vector<std::vector<int>>			&triVertexInds = bp.triVertexInds;
+	std::vector<std::vector<SlantedPlane>>	&triVertexBestLabels = bp.triVertexBestLabels;
+
+
+	if (event == CV_EVENT_LBUTTONDOWN)
+	{
+		y %= imL.rows; x %= imL.cols;
+		int bestIdx = 0;
+		for (int i = 0; i < vertexCoords.size(); i++) {
+			cv::Point2d &p = vertexCoords[i];
+			cv::Point2d &q = vertexCoords[bestIdx];
+			if ((y - p.y) * (y - p.y) + (x - p.x) * (x - p.x) 
+				< (y - q.y) * (y - q.y) + (x - q.x) * (x - q.x)) {
+				bestIdx = i;
+			}
+		}
+		y = vertexCoords[bestIdx].y;
+		x = vertexCoords[bestIdx].x;
+
+
+		std::vector<std::pair<int, int>> triIds;
+		for (int id = 0; id < triVertexInds.size(); id++) {
+			for (int j = 0; j < 3; j++) {
+				if (triVertexInds[id][j] == bestIdx) {
+					triIds.push_back(std::make_pair(id, j));
+				}
+			}
+		}
+
+		printf("\n\nCurrent vextex (%d, %d) has %d owners.\n", y, x, triIds.size());
+		std::vector<Probs> beliefs(triIds.size());
+		int maxNumLabels = 0;
+		for (int i = 0; i < triIds.size(); i++) {
+			int id = triIds[i].first;
+			int subId = triIds[i].second;
+			beliefs[i] = bp.allBeliefs[3 * id + subId];
+			maxNumLabels = std::max(maxNumLabels, (int)beliefs[i].size());
+		}
+		printf("maxNumLabels = %d\n", maxNumLabels);
+
+		printf("\n=========================== Beliefs ==============================\n");
+		for (int rowId = 0; rowId < maxNumLabels; rowId++) {
+			for (int i = 0; i < beliefs.size(); i++) {
+				if (rowId < beliefs[i].size()) {
+					printf("%10.4f  ", beliefs[i][rowId]);
+				}
+				else {
+					printf("**********  ");
+				}
+			}
+			printf("\n");
+		}
+
+		printf("\n\n=========================== Messages ==============================\n");
+
+		return;
+	}
+
 	if (event == CV_EVENT_LBUTTONDBLCLK) {
-		std::vector<std::pair<std::string, void*>> &auxParams
-			= *(std::vector<std::pair<std::string, void*>>*)((void**)param)[0];
-		cv::Mat &imL			= *(cv::Mat*)((void**)param)[3 + 1];
-		int numDisps			= *(int*)((void**)param)[8 + 1];
-		int maxDisp				= numDisps - 1;
-		std::string workingDir	= *(std::string*)((void**)param)[10 + 1];
-
-		ASSERT(auxParams[0].first == "vertexCoords")
-		ASSERT(auxParams[1].first == "triVertexInds")
-		ASSERT(auxParams[2].first == "triVertexBestLabels")
-		ASSERT(auxParams[3].first == "splitMap")
-
-		std::vector<cv::Point2d>				&vertexCoords = *(std::vector<cv::Point2d>*)auxParams[0].second;
-		std::vector<std::vector<int>>			&triVertexInds = *(std::vector<std::vector<int>>*)auxParams[1].second;
-		std::vector<std::vector<SlantedPlane>>	&triVertexBestLabels = *(std::vector<std::vector<SlantedPlane>>*)auxParams[2].second;
-		cv::Mat									&splitMap = *(cv::Mat*)auxParams[3].second;
-
 		std::string plyFilePath = workingDir + "/OnMouseMeshStereoMesh.ply";
 		std::string cmdInvokeMeshlab = "meshlab " + plyFilePath;
 		std::string textureFilePath = workingDir + "/im2.png";
@@ -230,7 +285,6 @@ void OnMouseMeshStereoOnFactorGraph(int event, int x, int y, int flags, void *pa
 		SaveMeshStereoResultToPly(imL, maxDisp, workingDir, plyFilePath, textureFilePath,
 			vertexCoords, triVertexInds, triVertexBestLabels, splitMap);
 		system(cmdInvokeMeshlab.c_str());
-
 		return;
 	}
 

@@ -114,5 +114,8 @@
     <ClCompile Include="BPOnFactorGraph.cpp">
       <Filter>LocalMethods</Filter>
     </ClCompile>
+    <ClCompile Include="GlobalParams.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

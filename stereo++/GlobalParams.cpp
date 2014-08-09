@@ -1,0 +1,125 @@
+#include <string>
+
+#define ASSERT(condition)								\
+	if (!(condition)) {									\
+		printf("ASSERT %s VIOLATED AT LINE %d, %s\n",	\
+			#condition, __LINE__, __FILE__);			\
+		exit(-1);										\
+	}
+
+
+
+struct GlobalParamsInitializer 
+	{ GlobalParamsInitializer(); }
+	autoInitObj;
+
+enum CostAggregationType	{ GRID, TOP50 };
+enum MatchingCostType		{ ADGRADIENT, ADCENSUS };
+CostAggregationType			gCostAggregationType;
+MatchingCostType			gMatchingCostType;
+
+float						TAU1;
+float						TAU2;
+float						TAU3;
+float						TANGENT_CUTOFF;
+float						TANGENT_LAMBDA;
+
+int							PATCHRADIUS;
+int							PATCHWIDTH;
+float						GRANULARITY;
+
+float						SIMILARITY_GAMMA;
+float						ISING_CUTOFF;
+float						ISING_LAMBDA;
+
+std::string					ROOTFOLDER;
+
+bool						USE_CONVEX_BP;
+int							MAX_PATCHMATCH_ITERS;
+
+
+
+
+
+
+
+
+
+GlobalParamsInitializer::GlobalParamsInitializer()
+{
+	std::string paramFilePath = "d:/data/stereo_params.txt";
+	FILE *fid = fopen(paramFilePath.c_str(), "r");
+	ASSERT(fid != NULL);
+
+	char keyStr[1024], valStr[1024];
+	while (fscanf(fid, "%s%s", keyStr, valStr) != EOF) {
+		if (std::string(keyStr) == "TAU1") {
+			sscanf(valStr, "%f", &TAU1);
+			printf("%20s = %f\n", "TAU1", TAU1);
+		}
+		else if (std::string(keyStr) == "TAU2") {
+			sscanf(valStr, "%f", &TAU2);
+			printf("%20s = %f\n", "TAU2", TAU2);
+		}
+		else if (std::string(keyStr) == "TAU3") {
+			sscanf(valStr, "%f", &TAU3);
+			printf("%20s = %f\n", "TAU3", TAU3);
+		}
+		else if (std::string(keyStr) == "TANGENT_CUTOFF") {
+			sscanf(valStr, "%f", &TANGENT_CUTOFF);
+			printf("%20s = %f\n", "TANGENT_CUTOFF", TANGENT_CUTOFF);
+		}
+		else if (std::string(keyStr) == "TANGENT_LAMBDA") {
+			sscanf(valStr, "%f", &TANGENT_LAMBDA);
+			printf("%20s = %f\n", "TANGENT_LAMBDA", TANGENT_LAMBDA);
+		}
+		else if (std::string(keyStr) == "PATCHRADIUS") {
+			sscanf(valStr, "%d", &PATCHRADIUS);
+			printf("%20s = %d\n", "PATCHRADIUS", PATCHRADIUS);
+		}
+		else if (std::string(keyStr) == "PATCHWIDTH") {
+			sscanf(valStr, "%d", &PATCHWIDTH);
+			printf("%20s = %d\n", "PATCHWIDTH", PATCHWIDTH);
+		}
+		else if (std::string(keyStr) == "GRANULARITY") {
+			sscanf(valStr, "%f", &GRANULARITY);
+			printf("%20s = %f\n", "GRANULARITY", GRANULARITY);
+		}
+		else if (std::string(keyStr) == "SIMILARITY_GAMMA") {
+			sscanf(valStr, "%f", &SIMILARITY_GAMMA);
+			printf("%20s = %f\n", "SIMILARITY_GAMMA", SIMILARITY_GAMMA);
+		}
+		else if (std::string(keyStr) == "ISING_CUTOFF") {
+			sscanf(valStr, "%f", &ISING_CUTOFF);
+			printf("%20s = %f\n", "ISING_CUTOFF", ISING_CUTOFF);
+		}
+		else if (std::string(keyStr) == "ISING_LAMBDA") {
+			sscanf(valStr, "%f", &ISING_LAMBDA);
+			printf("%20s = %f\n", "ISING_LAMBDA", ISING_LAMBDA);
+		}
+		else if (std::string(keyStr) == "ROOTFOLDER") {
+			ROOTFOLDER = std::string(valStr);
+			printf("%20s = %s\n", "ROOTFOLDER", ROOTFOLDER.c_str());
+		}
+		else if (std::string(keyStr) == "COSTAGGREGATION_TYPE") {
+			gCostAggregationType 
+				= (std::string(valStr) == "GRID" ? GRID : TOP50);
+			printf("%20s = %d\n", "COSTAGGREGATION_TYPE", gCostAggregationType);
+		}
+		else if (std::string(keyStr) == "MATCHINGCOST_TYPE") {
+			gMatchingCostType 
+				= (std::string(valStr) == "ADCENSUS" ? ADCENSUS : ADGRADIENT);
+			printf("%20s = %d\n", "MATCHINGCOST_TYPE", gMatchingCostType);
+		}
+		else if (std::string(keyStr) == "MAX_PATCHMATCH_ITERS") {
+			sscanf(valStr, "%d", &MAX_PATCHMATCH_ITERS);
+			printf("%20s = %d\n", "MAX_PATCHMATCH_ITERS", MAX_PATCHMATCH_ITERS);
+		}
+		else if (std::string(keyStr) == "USE_CONVEX_BP") {
+			USE_CONVEX_BP = (std::string(valStr) == "true");
+			printf("%20s = %d\n", "USE_CONVEX_BP", USE_CONVEX_BP);
+		}
+	}
+
+	fclose(fid);
+}

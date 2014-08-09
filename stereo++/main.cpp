@@ -27,26 +27,6 @@
 
 int main()
 {
-	//cv::Mat mat(3, 3, CV_32FC1);
-	//mat.setTo(3.3);
-	//std::cout << mat << "\n";
-	////for (int y = 0; y < 3; y++) {
-	////	for (int x = 0; x < 3; x++) {
-	////		printf("%d ....... ", mat.at<bool>(y, x));
-	////		printf("%d\n", mat.at<int>(y, x));
-	////		/*if (!mat.at<bool>(y, x)) {
-	////			printf("BUG!! at (%d, %d)\n", y, x);
-	////		}*/
-	////	}
-	////}
-	//return 0;
-
-	//void TestPatchMatchOnPixels();
-	//TestPatchMatchOnPixels();
-
-	//void TestTriangulation2D();
-	//TestTriangulation2D();
-
 	void TestPatchMatchOnTriangles();
 	TestPatchMatchOnTriangles();
 

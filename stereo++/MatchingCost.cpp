@@ -17,15 +17,14 @@
 
 
 
-int		PATCHRADIUS		= 17;
-int		PATCHWIDTH		= 35;
-float	GRANULARITY		= 1.f;
+extern int				PATCHRADIUS;
+extern int				PATCHWIDTH;
+extern float			GRANULARITY;
 
-enum CostAggregationType	{ REGULAR_GRID, TOP50 };
-enum MatchingCostType		{ ADGRADIENT, ADCENSUS };
-
-CostAggregationType		gCostAggregationType	= REGULAR_GRID;
-MatchingCostType		gMatchingCostType		= ADCENSUS;
+extern enum CostAggregationType		{ GRID, TOP50 };
+extern enum MatchingCostType		{ ADGRADIENT, ADCENSUS };
+extern CostAggregationType			gCostAggregationType;
+extern MatchingCostType				gMatchingCostType;
 
 MCImg<float>			gDsiL;
 MCImg<float>			gDsiR;
@@ -294,7 +293,7 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 	float totalCost = 0.f;
 	float accWeight = 0.f;
 
-	if (gCostAggregationType == REGULAR_GRID) {
+	if (gCostAggregationType == GRID) {
 		MCImg<float> w(PATCHWIDTH, PATCHWIDTH, 1, simWeights.line(yc * numCols + xc));
 		for (int y = yc - PATCHRADIUS, id = 0; y <= yc + PATCHRADIUS; y += STRIDE) {
 			for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE, id++) {

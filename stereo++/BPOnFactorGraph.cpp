@@ -13,26 +13,6 @@
 #include "BPOnFactorGraph.h"
 
 
-
-
-
-#define		PAIRWISECUTOFF		5
-#define		LAMBDA				0.001f
-
-#define		BOOL_SPLIT			1
-#define		BOOL_NOTSPLIT		0
-
-//#define		TAU1				0.025
-//#define		TAU2				0.1
-//#define		TAU3				0.1
-
-static float TAU1;
-static float TAU2;
-static float TAU3;
-static float TANGENT_CUTOFF;
-static float TANGENT_LAMBDA;
-
-
 #define ASSERT(condition)								\
 	if (!(condition)) {									\
 		printf("ASSERT %s VIOLATED AT LINE %d, %s\n",	\
@@ -40,14 +20,25 @@ static float TANGENT_LAMBDA;
 		exit(-1);										\
 	}
 
+#define		BOOL_SPLIT		1
+#define		BOOL_NOTSPLIT	0
 
+
+extern bool					USE_CONVEX_BP;
+extern float				TAU1;
+extern float				TAU2;
+extern float				TAU3;
+extern float				TANGENT_CUTOFF;
+extern float				TANGENT_LAMBDA;
+extern float				ISING_CUTOFF;
+extern float				ISING_LAMBDA;
 
 
 extern int					PATCHRADIUS;
 extern int					PATCHWIDTH;
 extern float				GRANULARITY;
 
-extern enum CostAggregationType { REGULAR_GRID, TOP50 };
+extern enum CostAggregationType { GRID, TOP50 };
 extern enum MatchingCostType	{ ADGRADIENT, ADCENSUS };
 
 extern CostAggregationType	gCostAggregationType;
@@ -144,39 +135,78 @@ float BPOnFG::RunNextIteration()
 
 void BPOnFG::UpdateMessageNVarToFactor(int i, int alpha)
 {
-	Message &nI2Alpha = MsgRefN(i, alpha);
-	nI2Alpha = varNodes[i].pot;
+	if (USE_CONVEX_BP) {
+		Message &nI2Alpha = MsgRefN(i, alpha);
+		nI2Alpha = varNodes[i].pot;
 
-	for (int k = 0; k < varNodes[i].factorNbs.size(); k++) {
-		int beta = varNodes[i].factorNbs[k];
-		if (beta != alpha) {
+		for (int k = 0; k < varNodes[i].factorNbs.size(); k++) {
+			int beta = varNodes[i].factorNbs[k];
 			nI2Alpha += MsgRefM(beta, i);
 		}
+		float c_alpha = 1.f;
+		float hat_c_i = 1.f + varNodes[i].factorNbs.size();
+		nI2Alpha *= (c_alpha / hat_c_i);
+		nI2Alpha -= MsgRefM(alpha, i);
+		NormalizeMessage(nI2Alpha);
 	}
+	else {
+		Message &nI2Alpha = MsgRefN(i, alpha);
+		nI2Alpha = varNodes[i].pot;
 
-	NormalizeMessage(nI2Alpha);
+		for (int k = 0; k < varNodes[i].factorNbs.size(); k++) {
+			int beta = varNodes[i].factorNbs[k];
+			if (beta != alpha) {
+				nI2Alpha += MsgRefM(beta, i);
+			}
+		}
+		NormalizeMessage(nI2Alpha);
+	}
 }
 
 void BPOnFG::UpdateMessageMFactorToVar(int alpha, int i)
 {
-	Message &mAlpha2i = MsgRefM(alpha, i);
-	std::fill(mAlpha2i.begin(), mAlpha2i.end(), FLT_MAX);
-	const int iLocalIdx = LocalIdxInNbs(factorNodes[alpha].varNbs, i);
+	if (USE_CONVEX_BP) {
+		// Update rule is exactly the same with simple loopy BP.
+		Message &mAlpha2i = MsgRefM(alpha, i);
+		std::fill(mAlpha2i.begin(), mAlpha2i.end(), FLT_MAX);
+		const int iLocalIdx = LocalIdxInNbs(factorNodes[alpha].varNbs, i);
 
-	for (int id = 0; id < factorNodes[alpha].numConfigs; id++) {
-		std::vector<int> config = LinearIdToConfig(id, alpha);
-		int xi = config[iLocalIdx];
-		/*float newMAlpha2iAtxi = SmoothnessCost(factorNodes[alpha].varNbs, config);*/
-		float newMAlpha2iAtxi = FactorPotential(factorNodes[alpha].varNbs, config);
+		for (int id = 0; id < factorNodes[alpha].numConfigs; id++) {
+			std::vector<int> config = LinearIdToConfig(id, alpha);
+			int xi = config[iLocalIdx];
+			/*float newMAlpha2iAtxi = SmoothnessCost(factorNodes[alpha].varNbs, config);*/
+			float newMAlpha2iAtxi = FactorPotential(factorNodes[alpha].varNbs, config);
 
-		for (int k = 0; k < factorNodes[alpha].varNbs.size(); k++) {
-			int j = factorNodes[alpha].varNbs[k];
-			if (j != i) {	// or k != iLocalIdx
-				newMAlpha2iAtxi += MsgRefN(j, alpha)[config[k]];
+			for (int k = 0; k < factorNodes[alpha].varNbs.size(); k++) {
+				int j = factorNodes[alpha].varNbs[k];
+				if (j != i) {	// or k != iLocalIdx
+					newMAlpha2iAtxi += MsgRefN(j, alpha)[config[k]];
+				}
 			}
-		}
 
-		mAlpha2i[xi] = std::min(mAlpha2i[xi], newMAlpha2iAtxi);
+			mAlpha2i[xi] = std::min(mAlpha2i[xi], newMAlpha2iAtxi);
+		}
+	}
+	else {
+		Message &mAlpha2i = MsgRefM(alpha, i);
+		std::fill(mAlpha2i.begin(), mAlpha2i.end(), FLT_MAX);
+		const int iLocalIdx = LocalIdxInNbs(factorNodes[alpha].varNbs, i);
+
+		for (int id = 0; id < factorNodes[alpha].numConfigs; id++) {
+			std::vector<int> config = LinearIdToConfig(id, alpha);
+			int xi = config[iLocalIdx];
+			/*float newMAlpha2iAtxi = SmoothnessCost(factorNodes[alpha].varNbs, config);*/
+			float newMAlpha2iAtxi = FactorPotential(factorNodes[alpha].varNbs, config);
+
+			for (int k = 0; k < factorNodes[alpha].varNbs.size(); k++) {
+				int j = factorNodes[alpha].varNbs[k];
+				if (j != i) {	// or k != iLocalIdx
+					newMAlpha2iAtxi += MsgRefN(j, alpha)[config[k]];
+				}
+			}
+
+			mAlpha2i[xi] = std::min(mAlpha2i[xi], newMAlpha2iAtxi);
+		}
 	}
 }
 
@@ -257,7 +287,7 @@ float RegularGridBPOnFG::FactorPotential(std::vector<int> &varInds, std::vector<
 {
 	// current doe not make use of varInds
 	ASSERT(config.size() == 2)
-	return LAMBDA * std::min(PAIRWISECUTOFF, std::abs(config[0] - config[1]));
+	return ISING_LAMBDA * std::min((int)ISING_CUTOFF, std::abs(config[0] - config[1]));
 }
 
 cv::Mat RegularGridBPOnFG::DecodeDisparityFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs)
@@ -364,33 +394,11 @@ void RegularGridBPOnFG::InitFromGridGraph(MCImg<float> &unaryCosts)
 
 
 /////////////////////////////////////////////////////  MeshStereoBPOnFG  /////////////////////////////////////////////////////
-void InitalizeTau()
-{
-	FILE *fid = fopen("d:/data/TAU.txt", "r");
-	ASSERT(fid != NULL);
-	fscanf(fid, "TAU1 = %f\n", &TAU1);
-	fscanf(fid, "TAU2 = %f\n", &TAU2);
-	fscanf(fid, "TAU3 = %f\n", &TAU3);
-	fscanf(fid, "TANGENT_LAMBDA = %f\n", &TANGENT_LAMBDA);
-	fscanf(fid, "TANGENT_CUTOFF = %f", &TANGENT_CUTOFF);
-	fclose(fid);
-
-	printf("\n");
-	printf("TAU1           = %f\n", TAU1);
-	printf("TAU2           = %f\n", TAU2);
-	printf("TAU3           = %f\n", TAU3);
-	printf("TANGENT_LAMBDA = %f\n", TANGENT_LAMBDA);
-	printf("TANGENT_CUTOFF = %f\n", TANGENT_CUTOFF);
-	printf("\n");
-}
-
 void MeshStereoBPOnFG::InitFromTriangulation(int numRows, int numCols, int numDisps,
 	std::vector<std::vector<SlantedPlane>> &candidateLabels, std::vector<std::vector<float>> &unaryCosts,
 	std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
 	std::vector<std::vector<cv::Point2i>> &triPixelList, cv::Mat &img)
 {
-	InitalizeTau();
-
 	int numTriangles = triVertexInds.size();
 	int numPrivateVertices = 3 * numTriangles;
 	int numSplitNodes = vertexCoords.size();
@@ -745,17 +753,12 @@ void MeshStereoBPOnFG::Run(std::string rootFolder, int maxIters, float tol)
 		float maxBeliefDiff = RunNextIteration();
 		cv::Mat splitMap = DecodeSplitMapFromBeliefs(numRows, numCols, allBeliefs);
 		cv::Mat splitImg = DecodeSplittingImageFromBeliefs(numRows, numCols, allBeliefs);
-
-		std::vector<std::vector<SlantedPlane>> triVertexBestLabels;
 		cv::Mat dispL = DecodeDisparityMapFromBeliefs(numRows, numCols, allBeliefs, triVertexBestLabels, 1);
-	
 
 		std::vector<std::pair<std::string, void*>> auxParams;
 		auxParams.push_back(std::pair<std::string, void*>("triImg", &splitImg));
-		auxParams.push_back(std::pair<std::string, void*>("vertexCoords", &vertexCoords));
-		auxParams.push_back(std::pair<std::string, void*>("triVertexInds", &triVertexInds));
-		auxParams.push_back(std::pair<std::string, void*>("triVertexBestLabels", &triVertexBestLabels));
 		auxParams.push_back(std::pair<std::string, void*>("splitMap", &splitMap));
+		auxParams.push_back(std::pair<std::string, void*>("MeshStereoBPOnFGObject", this));
 		EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams, "OnMouseMeshStereoOnFactorGraph");
 		
 		//EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
