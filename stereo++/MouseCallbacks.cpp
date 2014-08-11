@@ -145,7 +145,7 @@ void OnMouseLoopyBPOnGridGraph(int event, int x, int y, int flags, void *param)
 
 		ASSERT(auxParams[0].first == "allMessages")
 		ASSERT(auxParams[1].first == "allBeliefs")
-		ASSERT(auxParams[2].first == "unaryCost")
+		ASSERT(auxParams[2].first == "unaryCosts")
 		MCImg<float> &allMessages = *(MCImg<float>*)auxParams[0].second;
 		MCImg<float> &allBeliefs  = *(MCImg<float>*)auxParams[1].second;
 		MCImg<float> &unaryCost   = *(MCImg<float>*)auxParams[2].second;
@@ -163,6 +163,18 @@ void OnMouseLoopyBPOnGridGraph(int event, int x, int y, int flags, void *param)
 				   allMessages.get(y, x)[d + 1 * numDisps], d,
 				   allMessages.get(y, x)[d + 2 * numDisps],
 				   allMessages.get(y, x)[d + 3 * numDisps]);
+		}
+
+		cv::Mat &imL = *(cv::Mat*)((void**)param)[3 + 1];
+		const cv::Point2i dirDelta[4] = { cv::Point2i(0, -1), cv::Point2i(-1, 0), cv::Point2i(0, +1), cv::Point2i(+1, 0) };
+		cv::Point2i s(x, y);
+		extern float ISING_GAMMA;
+		for (int k = 0; k < 4; k++) {
+			cv::Point2i t = s + dirDelta[k];
+			if (InBound(t, numRows, numCols)) {
+				float simWeight = exp(-L1Dist(imL.at<cv::Vec3b>(s.y, s.x), imL.at<cv::Vec3b>(t.y, t.x)) / ISING_GAMMA);
+				printf("(%d, %d) simWeight = %f\n", t.y, t.x, simWeight);
+			}
 		}
 	}
 

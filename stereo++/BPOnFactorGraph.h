@@ -71,9 +71,11 @@ class RegularGridBPOnFG : public BPOnFG
 {
 public:
 	enum FactorType { LIEONHORIZONTAL, LIEONVERTICAL };
+	MCImg<float> *unaryCosts;
+	cv::Mat *img;
 
 public:
-	void InitFromGridGraph(MCImg<float> &unaryCosts);
+	void InitFromGridGraph(MCImg<float> &unaryCosts, cv::Mat &img);
 
 	float FactorPotential(std::vector<int> &varInds, std::vector<int> &config);
 

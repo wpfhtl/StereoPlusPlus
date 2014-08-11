@@ -1,6 +1,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <iostream>
 
 #include "MCImg.h"
 #include "SlantedPlane.h"
@@ -212,9 +213,14 @@ MCImg<float> ComputeAdCensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps,
 
 MCImg<float> ComputeAdGradientCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign, float granularity)
 {
-	#define COLORGRADALPHA	0.05f
-	#define COLORMAXDIFF	0.04f
-	#define GRADMAXDIFF		0.01f
+	//#define COLORGRADALPHA	0.05f
+	//#define COLORMAXDIFF	0.04f
+	//#define GRADMAXDIFF		0.01f
+
+	extern float COLORGRADALPHA;
+	extern float COLORMAXDIFF;
+	extern float GRADMAXDIFF;
+
 
 	int numRows = imL.rows, numCols = imL.cols;
 	int numLevels = numDisps / granularity;
@@ -251,6 +257,7 @@ MCImg<float> ComputeAdGradientCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisp
 				cv::Vec4f &gradRmR	= gradientR.at<cv::Vec4f>(y, xmR);
 				cv::Vec3f colorR	= wL * colorRmL + wR * colorRmR;
 				cv::Vec4f gradR		= wL * gradRmL + wR * gradRmR;
+
 
 				float costColor = std::min(COLORMAXDIFF, L1Dist(colorL, colorR));
 				float costGrad  = std::min(GRADMAXDIFF,  L1Dist(gradL, gradR));

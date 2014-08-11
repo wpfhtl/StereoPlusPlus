@@ -27,15 +27,34 @@
 
 int main()
 {
-	void TestPatchMatchOnTriangles();
-	TestPatchMatchOnTriangles();
+	extern int PROGRAM_ENTRY;
 
-	//void TestLBPOnGridGraph();
-	//TestLBPOnGridGraph();
+	switch (PROGRAM_ENTRY) {
+	case 1:
+		printf("\n\n========================================================\n");
+		printf("PROGRAM_ENTRY = %d, invoking TestPatchMatchOnTriangles() ...\n", 1);
+		printf("========================================================\n");
+		void TestPatchMatchOnTriangles();
+		TestPatchMatchOnTriangles();
+		break;
 
-	//void TestLBPOnFactorGraph();
-	//TestLBPOnFactorGraph();
+	case 2:
+		printf("\n\n========================================================\n");
+		printf("PROGRAM_ENTRY = %d, invoking TestLBPOnGridGraph() ...\n", 2);
+		printf("========================================================\n");
+		void TestLBPOnGridGraph();
+		TestLBPOnGridGraph();
+		break;
 
+	case 3:
+		printf("\n\n========================================================\n");
+		printf("PROGRAM_ENTRY = %d, invoking TestLBPOnFactorGraph() ...\n", 3);
+		printf("========================================================\n");
+		void TestLBPOnFactorGraph();
+		TestLBPOnFactorGraph();
+		break;
+	}
+	
 	return 0;
 }
 

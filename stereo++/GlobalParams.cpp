@@ -31,14 +31,18 @@ float						GRANULARITY;
 float						SIMILARITY_GAMMA;
 float						ISING_CUTOFF;
 float						ISING_LAMBDA;
+float						ISING_GAMMA;
 
 std::string					ROOTFOLDER;
 
 bool						USE_CONVEX_BP;
 int							MAX_PATCHMATCH_ITERS;
 
+float						COLORGRADALPHA;
+float						COLORMAXDIFF;
+float						GRADMAXDIFF;
 
-
+int							PROGRAM_ENTRY;
 
 
 
@@ -51,8 +55,10 @@ GlobalParamsInitializer::GlobalParamsInitializer()
 	FILE *fid = fopen(paramFilePath.c_str(), "r");
 	ASSERT(fid != NULL);
 
-	char keyStr[1024], valStr[1024];
-	while (fscanf(fid, "%s%s", keyStr, valStr) != EOF) {
+	char keyStr[1024], valStr[1024], lineBuf[1024];
+	while (fgets(lineBuf, 1023, fid) != NULL) {
+		sscanf(lineBuf, "%s%s", keyStr, valStr);
+
 		if (std::string(keyStr) == "TAU1") {
 			sscanf(valStr, "%f", &TAU1);
 			printf("%20s = %f\n", "TAU1", TAU1);
@@ -97,6 +103,10 @@ GlobalParamsInitializer::GlobalParamsInitializer()
 			sscanf(valStr, "%f", &ISING_LAMBDA);
 			printf("%20s = %f\n", "ISING_LAMBDA", ISING_LAMBDA);
 		}
+		else if (std::string(keyStr) == "ISING_GAMMA") {
+			sscanf(valStr, "%f", &ISING_GAMMA);
+			printf("%20s = %f\n", "ISING_GAMMA", ISING_GAMMA);
+		}
 		else if (std::string(keyStr) == "ROOTFOLDER") {
 			ROOTFOLDER = std::string(valStr);
 			printf("%20s = %s\n", "ROOTFOLDER", ROOTFOLDER.c_str());
@@ -116,10 +126,27 @@ GlobalParamsInitializer::GlobalParamsInitializer()
 			printf("%20s = %d\n", "MAX_PATCHMATCH_ITERS", MAX_PATCHMATCH_ITERS);
 		}
 		else if (std::string(keyStr) == "USE_CONVEX_BP") {
-			USE_CONVEX_BP = (std::string(valStr) == "true");
+			USE_CONVEX_BP = (std::string(valStr) == "true" || std::string(valStr) == "1");
 			printf("%20s = %d\n", "USE_CONVEX_BP", USE_CONVEX_BP);
 		}
-	}
+		else if (std::string(keyStr) == "COLORGRADALPHA") {
+			sscanf(valStr, "%f", &COLORGRADALPHA);
+			printf("%20s = %f\n", "COLORGRADALPHA", COLORGRADALPHA);
+		}
+		else if (std::string(keyStr) == "COLORMAXDIFF") {
+			sscanf(valStr, "%f", &COLORMAXDIFF);
+			printf("%20s = %f\n", "COLORMAXDIFF", COLORMAXDIFF);
+		}
+		else if (std::string(keyStr) == "GRADMAXDIFF") {
+			sscanf(valStr, "%f", &GRADMAXDIFF);
+			printf("%20s = %f\n", "GRADMAXDIFF", GRADMAXDIFF);
+		}
+		else if (std::string(keyStr) == "PROGRAM_ENTRY") {
+			sscanf(valStr, "%d", &PROGRAM_ENTRY);
+			printf("%20s = %d\n", "PROGRAM_ENTRY", PROGRAM_ENTRY);
+		}
 
+	}
+	
 	fclose(fid);
 }

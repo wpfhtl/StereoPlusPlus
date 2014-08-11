@@ -276,18 +276,33 @@ void RegularGridBPOnFG::Run(std::string rootFolder, int maxIters, float tol)
 	cv::Mat imL = cv::imread("d:/data/stereo/" + rootFolder + "/im2.png");
 	int numRows = imL.rows, numCols = imL.cols;
 
-	for (int iter = 0; iter < maxIters; iter++) {
+	for (int iter = 0; iter < 100; iter++) {
+		printf("========= doing iteration %d =========...\n", iter);
 		RunNextIteration();
+
+		int numDisps, maxDisp, visualizeScale;
+		SetupStereoParameters(rootFolder, numDisps, maxDisp, visualizeScale);
 		cv::Mat dispL = DecodeDisparityFromBeliefs(numRows, numCols, allBeliefs);
-		EvaluateDisparity(rootFolder, dispL);
+		cv::cvtColor(dispL, dispL, CV_GRAY2BGR);
+		dispL.convertTo(dispL, CV_8UC3, visualizeScale);
+		char filePath[1024];
+		sprintf(filePath, "d:/data/tmpResults/iter=%d.png", iter);
+		cv::imwrite(filePath, dispL);
 	}
+	cv::Mat dispL = DecodeDisparityFromBeliefs(numRows, numCols, allBeliefs);
+	EvaluateDisparity(rootFolder, dispL);
 }
 
 float RegularGridBPOnFG::FactorPotential(std::vector<int> &varInds, std::vector<int> &config)
 {
 	// current doe not make use of varInds
-	ASSERT(config.size() == 2)
-	return ISING_LAMBDA * std::min((int)ISING_CUTOFF, std::abs(config[0] - config[1]));
+	ASSERT(config.size() == 2);
+	extern float ISING_GAMMA;
+	int numRows = img->rows, numCols = img->cols;
+	int y0 = varInds[0] / numCols, x0 = varInds[0] % numCols;
+	int y1 = varInds[1] / numCols, x1 = varInds[1] % numCols;
+	float simWeight = exp(-L1Dist(img->at<cv::Vec3b>(y0, x0), img->at<cv::Vec3b>(y1, x1)) / ISING_GAMMA);
+	return simWeight * ISING_LAMBDA * std::min((int)ISING_CUTOFF, std::abs(config[0] - config[1]));
 }
 
 cv::Mat RegularGridBPOnFG::DecodeDisparityFromBeliefs(int numRows, int numCols, std::vector<Probs> &allBeliefs)
@@ -313,7 +328,7 @@ int RegularGridBPOnFG::GetFactorId(int y, int x, int numRows, int numCols, Facto
 	}
 }
 
-void RegularGridBPOnFG::InitFromGridGraph(MCImg<float> &unaryCosts)
+void RegularGridBPOnFG::InitFromGridGraph(MCImg<float> &unaryCosts, cv::Mat &img)
 {
 	// Factor node ID coding scheme: there are two types of factor nodes on grid graph.
 	// Fist type lies on horizontal connection, second type lies on vertical connection.
@@ -325,6 +340,8 @@ void RegularGridBPOnFG::InitFromGridGraph(MCImg<float> &unaryCosts)
 	// and y is the row id of its top neighbor. 
 
 	int numRows = unaryCosts.h, numCols = unaryCosts.w, numDisps = unaryCosts.n;
+	this->unaryCosts = &unaryCosts;
+	this->img = &img;
 
 	// Step 1 - Initialize beliefs
 	Probs tieBelief(numDisps, 1.f / numDisps);
@@ -749,17 +766,19 @@ void MeshStereoBPOnFG::Run(std::string rootFolder, int maxIters, float tol)
 	cv::Mat imL = cv::imread("d:/data/stereo/" + rootFolder + "/im2.png");
 	int numRows = imL.rows, numCols = imL.cols;
 
-	for (int iter = 0; iter < maxIters; iter++) {
-		float maxBeliefDiff = RunNextIteration();
-		cv::Mat splitMap = DecodeSplitMapFromBeliefs(numRows, numCols, allBeliefs);
-		cv::Mat splitImg = DecodeSplittingImageFromBeliefs(numRows, numCols, allBeliefs);
-		cv::Mat dispL = DecodeDisparityMapFromBeliefs(numRows, numCols, allBeliefs, triVertexBestLabels, 1);
+	for (int iter = 0; iter < 100; iter++) {
+		printf("Doing iteration: %d\n", iter);
 
-		std::vector<std::pair<std::string, void*>> auxParams;
-		auxParams.push_back(std::pair<std::string, void*>("triImg", &splitImg));
-		auxParams.push_back(std::pair<std::string, void*>("splitMap", &splitMap));
-		auxParams.push_back(std::pair<std::string, void*>("MeshStereoBPOnFGObject", this));
-		EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams, "OnMouseMeshStereoOnFactorGraph");
+		float maxBeliefDiff = RunNextIteration();
+		//cv::Mat splitMap = DecodeSplitMapFromBeliefs(numRows, numCols, allBeliefs);
+		//cv::Mat splitImg = DecodeSplittingImageFromBeliefs(numRows, numCols, allBeliefs);
+		//cv::Mat dispL = DecodeDisparityMapFromBeliefs(numRows, numCols, allBeliefs, triVertexBestLabels, 1);
+
+		//std::vector<std::pair<std::string, void*>> auxParams;
+		//auxParams.push_back(std::pair<std::string, void*>("triImg", &splitImg));
+		//auxParams.push_back(std::pair<std::string, void*>("splitMap", &splitMap));
+		//auxParams.push_back(std::pair<std::string, void*>("MeshStereoBPOnFGObject", this));
+		//EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams, "OnMouseMeshStereoOnFactorGraph");
 		
 		//EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
 		//EvaluateDisparity(rootFolder, dispL);
@@ -767,7 +786,26 @@ void MeshStereoBPOnFG::Run(std::string rootFolder, int maxIters, float tol)
 			printf("Beliefs has converged at maxBelifDiff = %f, exiting...\n", maxBeliefDiff);
 			break;
 		}
+
+		int numDisps, maxDisp, visualizeScale;
+		SetupStereoParameters(rootFolder, numDisps, maxDisp, visualizeScale);
+		cv::Mat dispL = DecodeDisparityMapFromBeliefs(numRows, numCols, allBeliefs, triVertexBestLabels, 1);
+		cv::cvtColor(dispL, dispL, CV_GRAY2BGR);
+		dispL.convertTo(dispL, CV_8UC3, visualizeScale);
+		char filePath[1024];
+		sprintf(filePath, "d:/data/tmpResults/iter=%d.png", iter);
+		cv::imwrite(filePath, dispL);
 	}
+
+	cv::Mat splitMap = DecodeSplitMapFromBeliefs(numRows, numCols, allBeliefs);
+	cv::Mat splitImg = DecodeSplittingImageFromBeliefs(numRows, numCols, allBeliefs);
+	cv::Mat dispL = DecodeDisparityMapFromBeliefs(numRows, numCols, allBeliefs, triVertexBestLabels, 1);
+
+	std::vector<std::pair<std::string, void*>> auxParams;
+	auxParams.push_back(std::pair<std::string, void*>("triImg", &splitImg));
+	auxParams.push_back(std::pair<std::string, void*>("splitMap", &splitMap));
+	auxParams.push_back(std::pair<std::string, void*>("MeshStereoBPOnFGObject", this));
+	EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams, "OnMouseMeshStereoOnFactorGraph");
 }
 /////////////////////////////////////////////////////  End of MeshStereoBPOnFG  /////////////////////////////////////////////////////
 
@@ -793,7 +831,7 @@ void TestLBPOnFactorGraph()
 	EvaluateDisparity("tsukuba", dispL);
 #else
 	RegularGridBPOnFG bp;
-	bp.InitFromGridGraph(unaryCosts);
+	bp.InitFromGridGraph(unaryCosts, imL);
 	bp.Run("tsukuba");
 #endif
 }
