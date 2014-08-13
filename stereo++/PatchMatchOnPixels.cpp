@@ -123,125 +123,7 @@ MCImg<float> PrecomputeSimilarityWeights(cv::Mat &img, int patchRadius, int simG
 	return simWeights;
 }
 
-static cv::Mat SlantedPlaneMapToDisparityMap(MCImg<SlantedPlane> &slantedPlanes)
-{
-	int numRows = slantedPlanes.h, numCols = slantedPlanes.w;
-	cv::Mat dispMap(numRows, numCols, CV_32FC1);
 
-	for (int y = 0; y < numRows; y++) {
-		for (int x = 0; x < numCols; x++) {
-			dispMap.at<float>(y, x) = slantedPlanes[y][x].ToDisparity(y, x);
-		}
-	}
-
-	return dispMap;
-}
-
-static cv::Mat CrossCheck(cv::Mat &dispL, cv::Mat &dispR, int sign, float thresh = 1.f)
-{
-	int numRows = dispL.rows, numCols = dispL.cols;
-	cv::Mat validPixelMapL(numRows, numCols, CV_8UC1);
-
-	for (int y = 0; y < numRows; y++) {
-		for (int x = 0; x < numCols; x++) {
-			int xMatch = 0.5 + x + sign * dispL.at<float>(y, x);
-			if (0 <= xMatch && xMatch < numCols
-				&& std::abs(dispL.at<float>(y, x) - dispR.at<float>(y, xMatch)) <= thresh) {
-				validPixelMapL.at<unsigned char>(y, x) = 255;
-			}
-			else {
-				validPixelMapL.at<unsigned char>(y, x) = 0;
-			}
-		}
-	}
-
-	return validPixelMapL;
-}
-
-static void DisparityHoleFilling(cv::Mat &disp, MCImg<SlantedPlane> &slantedPlanes, cv::Mat &validPixelMap)
-{
-	// This function fills the invalid pixel (y,x) by finding its nearst (left and right) 
-	// valid neighbors on the same scanline, and select the one with lower disparity.
-	int numRows = disp.rows, numCols = disp.cols;
-	for (int y = 0; y < numRows; y++) {
-		for (int x = 0; x < numCols; x++) {
-			if (!validPixelMap.at<unsigned char>(y, x)) {
-				int xL = x - 1, xR = x + 1;
-				float dL = FLT_MAX, dR = FLT_MAX;
-				while (!validPixelMap.at<unsigned char>(y, xL) && 0 <= xL)		xL--;
-				while (!validPixelMap.at<unsigned char>(y, xR) && xR < numCols)	xR++;
-				if (xL >= 0)		dL = slantedPlanes[y][xL].ToDisparity(y, x);
-				if (xR < numCols)	dR = slantedPlanes[y][xR].ToDisparity(y, x);
-				disp.at<float>(y, x) = std::min(dL, dR);
-			}
-		}
-	}
-}
-
-static float SelectWeightedMedianFromPatch(cv::Mat &disp, int yc, int xc, float *w)
-{
-	int numRows = disp.rows, numCols = disp.cols;
-	std::vector<std::pair<float, float>> depthWeightPairs;
-	depthWeightPairs.reserve(PATCHWIDTH * PATCHWIDTH);
-
-	for (int y = yc - PATCHRADIUS, id = 0; y <= yc + PATCHRADIUS; y++) {
-		for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x++, id++) {
-			if (InBound(y, x, numRows, numCols)) {
-				depthWeightPairs.push_back(std::make_pair(disp.at<float>(y, x), w[id]));
-			}
-		}
-	}
-
-	std::sort(depthWeightPairs.begin(), depthWeightPairs.end());
-
-	float wAcc = 0.f, wSum = 0.f;
-	for (int i = 0; i < depthWeightPairs.size(); i++) {
-		wSum += depthWeightPairs[i].second;
-	}
-	for (int i = 0; i < depthWeightPairs.size(); i++) {
-		wAcc += depthWeightPairs[i].second;
-		if (wAcc >= wSum / 2.f) {
-			// Note that this line can always be reached
-			if (i > 0) {
-				return (depthWeightPairs[i - 1].first + depthWeightPairs[i].first) / 2.f;
-			}
-			else {
-				return depthWeightPairs[i].first;
-			}
-		}
-	}
-
-	return disp.at<float>(yc, xc);
-}
-
-static void WeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixelMap, cv::Mat &guideImg)
-{
-	cv::Mat dispOut = disp.clone();
-	int numRows = disp.rows, numCols = disp.cols;
-	float *w = new float[PATCHWIDTH * PATCHWIDTH];
-
-	#pragma omp parallel for
-	for (int yc = 0; yc < numRows; yc++) {
-		for (int xc = 0; xc < numCols; xc++) {
-			if (!validPixelMap.at<unsigned char>(yc, xc)) {
-				memset(w, 0, PATCHWIDTH * PATCHWIDTH * sizeof(float));
-				cv::Vec3b &center = guideImg.at<cv::Vec3b>(yc, xc);
-				for (int y = yc - PATCHRADIUS, id = 0; y <= yc + PATCHRADIUS; y++) {
-					for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x++, id++) {
-						if (InBound(y, x, numRows, numCols)) {
-							cv::Vec3b &c = guideImg.at<cv::Vec3b>(y, x);
-							w[id] = exp(-L1Dist(center, c) / (float)SIMILARITY_GAMMA);
-						}
-					}
-				}
-				dispOut.at<float>(yc, xc) = SelectWeightedMedianFromPatch(disp, yc, xc, w);
-			}
-		}
-	}
-	
-	delete[] w;
-	dispOut.copyTo(disp);
-}
 
 void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR)
 {
@@ -334,22 +216,15 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 
 
 	// Step 3 - Cross check and post-process
-	cv::Mat validPixelMapL = CrossCheck(dispL, dispR, -1);
-	cv::Mat validPixelMapR = CrossCheck(dispR, dispL, +1);
-
-	DisparityHoleFilling(dispL, slantedPlanesL, validPixelMapL);
-	DisparityHoleFilling(dispR, slantedPlanesR, validPixelMapR);
-
-	validPixelMapL = CrossCheck(dispL, dispR, -1);
-	validPixelMapR = CrossCheck(dispR, dispL, +1);
-
-	bs::Timer::Tic("WMF");
-	WeightedMedianFilterInvalidPixels(dispL, validPixelMapL, imL);
-	WeightedMedianFilterInvalidPixels(dispR, validPixelMapR, imR);
-	bs::Timer::Toc();
-
-	EvaluateDisparity(rootFolder, dispL, 0.5f);
+	PatchMatchOnPixelPostProcess(slantedPlanesL, slantedPlanesR, imL, imR, dispL, dispR);
+	std::vector<std::pair<std::string, void*>> auxParams;
+	auxParams.push_back(std::pair<std::string, void*>("slantedPlanesL", &slantedPlanesL));
+	auxParams.push_back(std::pair<std::string, void*>("bestCostsL", &bestCostsL));
+	EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams, "OnMousePatchMatchOnPixels");
 }
+
+
+
 
 void TestPatchMatchOnPixels()
 {

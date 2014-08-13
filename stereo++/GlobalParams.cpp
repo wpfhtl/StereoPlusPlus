@@ -1,11 +1,6 @@
 #include <string>
 
-#define ASSERT(condition)								\
-	if (!(condition)) {									\
-		printf("ASSERT %s VIOLATED AT LINE %d, %s\n",	\
-			#condition, __LINE__, __FILE__);			\
-		exit(-1);										\
-	}
+#include "ReleaseAssert.h"
 
 
 
@@ -57,6 +52,9 @@ GlobalParamsInitializer::GlobalParamsInitializer()
 
 	char keyStr[1024], valStr[1024], lineBuf[1024];
 	while (fgets(lineBuf, 1023, fid) != NULL) {
+		if (std::string(lineBuf) == "\n") {
+			continue;
+		}
 		sscanf(lineBuf, "%s%s", keyStr, valStr);
 
 		if (std::string(keyStr) == "TAU1") {

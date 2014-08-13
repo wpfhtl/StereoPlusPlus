@@ -2,14 +2,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
-
-#define ASSERT(condition)								\
-	if (!(condition)) {									\
-		printf("ASSERT %s VIOLATED AT LINE %d, %s\n",	\
-			#condition, __LINE__, __FILE__);			\
-		exit(-1);										\
-	} 
-
+#include "ReleaseAssert.h"
 
 
 

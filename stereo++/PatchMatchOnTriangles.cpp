@@ -9,7 +9,9 @@
 #include "SlantedPlane.h"
 #include "Timer.h"
 #include "BPOnFactorGraph.h"
+#include "ReleaseAssert.h"
 
+#define PROCESS_RIGHT_VIEW
 
 
 extern int					PATCHRADIUS;
@@ -374,6 +376,199 @@ static void GenerateMeshStereoCandidateLabels(int numRows, int numCols, int numD
 	}
 }
 
+static std::vector<float> DetermineTriangleConfidence(cv::Mat &validPixelMap, std::vector<std::vector<cv::Point2i>> &triPixelLists)
+{
+	int numTriangles = triPixelLists.size();
+	std::vector<float> confidence(numTriangles);
+	for (int id = 0; id < numTriangles; id++) {
+		std::vector<cv::Point2i> &pixelList = triPixelLists[id];
+		int numValidPixels = 0;
+		for (int i = 0; i < pixelList.size(); i++) {
+			cv::Point2i &p = pixelList[i];
+			if (validPixelMap.at<bool>(p.y, p.x)) {
+				numValidPixels++;
+			}
+		}
+		confidence[id] = (float)numValidPixels / (float)pixelList.size();
+	}
+	return confidence;
+}
+
+#if 0
+static void TriangleOcclusionFilling(std::vector<SlantedPlane> &slantedPlanes, std::vector<cv::Point2d> &baryCenters, 
+	std::vector<std::vector<int>> &nbIndices, std::vector<float> &confidence)
+{
+	const float LOW_CONF_THRESH = 0.5f;
+	const float HIGH_CONF_THRESH = 0.8f;
+	int numTriangles = slantedPlanes.size();
+
+	for (int id = 0; id < numTriangles; id++) {
+		if (confidence[id] < LOW_CONF_THRESH) {
+
+			float lowestDisp = FLT_MAX;
+			int bestNbId = -1;
+			float yc = baryCenters[id].y;
+			float xc = baryCenters[id].x;
+
+			for (int k = 0; k < nbIndices[id].size(); k++) {
+				int nbId = nbIndices[id][k];
+				if (confidence[nbId] > HIGH_CONF_THRESH) {
+					float d = slantedPlanes[nbId].ToDisparity(yc, xc);
+					if (d < lowestDisp) {
+						lowestDisp = d;
+						bestNbId = nbId;
+					}
+				}
+			}
+			if (bestNbId != -1) {
+				slantedPlanes[id] = slantedPlanes[bestNbId];
+			}
+		}
+	}
+}
+#else
+static void TriangleOcclusionFilling(int numRows, int numCols, std::vector<SlantedPlane> &slantedPlanes, 
+	std::vector<cv::Point2d> &baryCenters, std::vector<std::vector<int>> &nbIndices, 
+	std::vector<float> &confidence, std::vector<std::vector<cv::Point2i>> &triPixelLists)
+{
+	const float LOW_CONF_THRESH		= 0.4f;
+	const float HIGH_CONF_THRESH	= 0.8;
+	int numTriangles = slantedPlanes.size();
+
+	cv::Mat ownerMap(numRows, numCols, CV_32SC1);
+	ownerMap.setTo(-1);
+	for (int id = 0; id < numTriangles; id++) {
+		std::vector<cv::Point2i> &pixelList = triPixelLists[id];
+		for (int k = 0; k < pixelList.size(); k++) {
+			cv::Point2i &p = pixelList[k];
+			ownerMap.at<int>(p.y, p.x) = id;
+		}
+	}
+
+
+	for (int id = 0; id < numTriangles; id++) {
+		if (confidence[id] < LOW_CONF_THRESH) {
+
+			int yc = baryCenters[id].y + 0.5;
+			int xc = baryCenters[id].x + 0.5;
+			std::set<int> nbIdSet;
+
+			const int RADIUS = 17;
+			for (int y = yc - RADIUS; y <= yc + RADIUS; y++) {
+				for (int x = xc - RADIUS; x <= xc + RADIUS; x++) {
+					if (InBound(y, x, numRows, numCols)) {
+						nbIdSet.insert(ownerMap.at<int>(y, x));
+					}
+				}
+			}
+
+			float lowestDisp = FLT_MAX;
+			int bestNbId = -1;
+
+			for (std::set<int>::iterator it = nbIdSet.begin(); it != nbIdSet.end(); it++) {
+				int nbId = *it;
+				if (nbId != -1 && confidence[nbId] > HIGH_CONF_THRESH) {
+					float d = slantedPlanes[nbId].ToDisparity(baryCenters[id].y, baryCenters[id].x);
+					if (d < lowestDisp) {
+						lowestDisp = d;
+						bestNbId = nbId;
+					}
+				}
+			}
+			if (bestNbId != -1) {
+				slantedPlanes[id] = slantedPlanes[bestNbId];
+			}
+		}
+	}
+}
+#endif
+
+static cv::Mat DrawTriangleConfidenceMap(int numRows, int numCols, std::vector<float> &confidence, std::vector<std::vector<cv::Point2i>> &triPixelLists)
+{
+	ASSERT(confidence.size() == triPixelLists.size());
+	cv::Mat confidenceMap(numRows, numCols, CV_32FC1);
+	confidenceMap.setTo(0.f);
+	int numTriangles = confidence.size();
+	for (int id = 0; id < numTriangles; id++) {
+		std::vector<cv::Point2i> &pixelList = triPixelLists[id];
+		for (int k = 0; k < pixelList.size(); k++) {
+			cv::Point2i &p = pixelList[k];
+			ASSERT(InBound(p.y, p.x, numRows, numCols))
+			confidenceMap.at<float>(p.y, p.x) = confidence[id];
+		}
+	}
+	cv::cvtColor(confidenceMap, confidenceMap, CV_GRAY2BGR);
+	confidenceMap.convertTo(confidenceMap, CV_8UC3, 255);
+	return confidenceMap;
+}
+
+void PatchMatchOnTrianglePostProcess(int numRows, int numCols,
+	std::vector<SlantedPlane> &slantedPlanesL,				std::vector<SlantedPlane> &slantedPlanesR,
+	std::vector<cv::Point2d> &baryCentersL,					std::vector<cv::Point2d> &baryCentersR,
+	std::vector<std::vector<int>>& nbIndicesL,				std::vector<std::vector<int>>& nbIndicesR,
+	std::vector<std::vector<cv::Point2i>> &triPixelListsL,	std::vector<std::vector<cv::Point2i>> &triPixelListsR,
+	cv::Mat &dispL, cv::Mat &dispR)
+{
+	// Step 1 - CrossCheck
+	dispL = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanesL, triPixelListsL);
+	dispR = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanesR, triPixelListsR);
+
+	cv::Mat validPixelMapL = CrossCheck(dispL, dispR, -1);
+	cv::Mat validPixelMapR = CrossCheck(dispR, dispL, +1);
+
+	std::vector<float> confidenceL = DetermineTriangleConfidence(validPixelMapL, triPixelListsL);
+	std::vector<float> confidenceR = DetermineTriangleConfidence(validPixelMapR, triPixelListsR);
+
+	cv::Mat confidenceImgL = DrawTriangleConfidenceMap(numRows, numCols, confidenceL, triPixelListsL);
+	//cv::imshow("confidenceL", confidenceImgL);
+
+	// Step 2 - Occlusion Filling
+	// Replace the low-confidence triangles with their high-confidence neighbors
+	TriangleOcclusionFilling(numRows, numCols, slantedPlanesL, baryCentersL, nbIndicesL, confidenceL, triPixelListsL);
+	TriangleOcclusionFilling(numRows, numCols, slantedPlanesR, baryCentersR, nbIndicesR, confidenceR, triPixelListsR);
+	
+
+	// Step 3 - WMF
+	// Finally, an optional pixelwise filtering
+	// currently left empty.
+
+	// Step 4 - Ouput disparity
+	dispL = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanesL, triPixelListsL);
+	dispR = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanesR, triPixelListsR);
+
+	std::vector<std::pair<std::string, void*>> auxParams;
+	auxParams.push_back(std::pair<std::string, void*>("triImg", &confidenceImgL));
+	EvaluateDisparity(ROOTFOLDER, dispL, 0.5f, auxParams);
+}
+
+
+void PatchMatchOnPixelPostProcess(std::vector<SlantedPlane> &slantedPlanesL, std::vector<SlantedPlane> &slantedPlanesR, 
+	std::vector<std::vector<cv::Point2i>> &triPixelListsL, std::vector<std::vector<cv::Point2i>> &triPixelListsR, 
+	cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR)
+{
+	int numRows = imL.rows, numCols = imL.cols;
+	MCImg<SlantedPlane> pixelwiseSlantedPlanesL(numRows, numCols);
+	MCImg<SlantedPlane> pixelwiseSlantedPlanesR(numRows, numCols);
+
+	for (int id = 0; id < triPixelListsL.size(); id++) {
+		std::vector<cv::Point2i> &pixelList = triPixelListsL[id];
+		for (int i = 0; i < pixelList.size(); i++) {
+			cv::Point2i &p = pixelList[i];
+			pixelwiseSlantedPlanesL[p.y][p.x] = slantedPlanesL[id];
+		}
+	}
+	for (int id = 0; id < triPixelListsR.size(); id++) {
+		std::vector<cv::Point2i> &pixelList = triPixelListsR[id];
+		for (int i = 0; i < pixelList.size(); i++) {
+			cv::Point2i &p = pixelList[i];
+			pixelwiseSlantedPlanesR[p.y][p.x] = slantedPlanesR[id];
+		}
+	}
+
+	PatchMatchOnPixelPostProcess(pixelwiseSlantedPlanesL, pixelwiseSlantedPlanesR,
+		imL, imR, dispL, dispR);
+}
+
 void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 {
 	int numRows = imL.rows, numCols = imL.cols;
@@ -383,17 +578,23 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 	std::vector<cv::Point2d> vertexCoordsL, vertexCoordsR;
 	std::vector<std::vector<int>> triVertexIndsL, triVertexIndsR;
 	Triangulate2DImage(imL, vertexCoordsL, triVertexIndsL);
-	//Triangulate2DImage(imR, vertexCoordsR, triVertexIndsR);
+#ifdef PROCESS_RIGHT_VIEW
+	Triangulate2DImage(imR, vertexCoordsR, triVertexIndsR);
+#endif
 	cv::Mat triImgL = DrawTriangleImage(numRows, numCols, vertexCoordsL, triVertexIndsL);
 
 	std::vector<cv::Point2d> baryCentersL, baryCentersR;
 	std::vector<std::vector<int>> nbIndicesL, nbIndicesR;
 	ConstructNeighboringGraph(numRows, numCols, vertexCoordsL, triVertexIndsL, baryCentersL, nbIndicesL);
-	//ConstructNeighboringGraph(numRows, numCols, vertexCoordsR, triVertexIndsR, baryCentersR, nbIndicesR);
+#ifdef PROCESS_RIGHT_VIEW
+	ConstructNeighboringGraph(numRows, numCols, vertexCoordsR, triVertexIndsR, baryCentersR, nbIndicesR);
+#endif
 
 	std::vector<std::vector<cv::Point2i>> triPixelListsL, triPixelListsR;
 	DeterminePixelOwnership(numRows, numCols, vertexCoordsL, triVertexIndsL, triPixelListsL);
-	//DeterminePixelOwnership(numRows, numCols, vertexCoordsR, triVertexIndsR, triPixelListsR);
+#ifdef PROCESS_RIGHT_VIEW
+	DeterminePixelOwnership(numRows, numCols, vertexCoordsR, triVertexIndsR, triPixelListsR);
+#endif
 
 	int numTrianglesL = baryCentersL.size();
 	int numTrianglesR = baryCentersR.size();
@@ -402,11 +603,15 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 
 	if (gMatchingCostType == ADCENSUS) {
 		gDsiL = ComputeAdCensusCostVolume(imL, imR, numDisps, -1, GRANULARITY);
-		//gDsiR = ComputeAdCensusCostVolume(imR, imL, numDisps, +1, GRANULARITY);
+#ifdef PROCESS_RIGHT_VIEW
+		gDsiR = ComputeAdCensusCostVolume(imR, imL, numDisps, +1, GRANULARITY);
+#endif
 	}
 	else if (gMatchingCostType == ADGRADIENT) {
 		gDsiL = ComputeAdGradientCostVolume(imL, imR, numDisps, -1, GRANULARITY);
-		//gDsiR = ComputeAdGradientCostVolume(imR, imL, numDisps, +1, GRANULARITY);
+#ifdef PROCESS_RIGHT_VIEW
+		gDsiR = ComputeAdGradientCostVolume(imR, imL, numDisps, +1, GRANULARITY);
+#endif
 	}
 
 	std::vector<SimVector> simVecsStdL;
@@ -416,17 +621,21 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 		bs::Timer::Tic("Precompute Similarity Weights");
 		MCImg<float> PrecomputeSimilarityWeights(cv::Mat &img, int patchRadius, int simGamma);
 		gSimWeightsL = PrecomputeSimilarityWeights(imL, PATCHRADIUS, SIMILARITY_GAMMA);
-		//gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITY_GAMMA);
+#ifdef PROCESS_RIGHT_VIEW
+		gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITY_GAMMA);
+#endif
 		bs::Timer::Toc();
 	}
 	else if (gCostAggregationType == TOP50) {
 		bs::Timer::Tic("Begin SelfSimilarityPropagation");
 		SelfSimilarityPropagation(imL, simVecsStdL);
-		//SelfSimilarityPropagation(imR, simVecsStdR);
 		InitSimVecWeights(imL, simVecsStdL);
-		//InitSimVecWeights(imR, simVecsStdR);
 		gSimVecsL = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdL[0]);
-		//gSimVecsR = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdR[0]);
+#ifdef PROCESS_RIGHT_VIEW
+		SelfSimilarityPropagation(imR, simVecsStdR);
+		InitSimVecWeights(imR, simVecsStdR);
+		gSimVecsR = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdR[0]);
+#endif		
 		bs::Timer::Toc();
 	}
 
@@ -434,10 +643,12 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 		slantedPlanesL[id] = SlantedPlane::ConstructFromRandomInit(baryCentersL[id].y, baryCentersL[id].x, maxDisp);
 		bestCostsL[id] = PatchMatchSlantedPlaneCost(baryCentersL[id].y + 0.5, baryCentersL[id].x + 0.5, slantedPlanesL[id], -1);
 	}
-	/*for (int id = 0; id < numTrianglesR; id++) {
+#ifdef PROCESS_RIGHT_VIEW
+	for (int id = 0; id < numTrianglesR; id++) {
 		slantedPlanesR[id] = SlantedPlane::ConstructFromRandomInit(baryCentersR[id].y, baryCentersR[id].x, maxDisp);
 		bestCostsR[id] = PatchMatchSlantedPlaneCost(baryCentersR[id].y + 0.5, baryCentersR[id].x + 0.5, slantedPlanesR[id], -1);
-	}*/
+	}
+#endif
 
 
 	std::vector<int> idListL(numTrianglesL), idListR(numTrianglesR);
@@ -458,14 +669,15 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 			int id = idListL[i];
 			PropagateAndRandomSearch(id, -1, maxDisp, baryCentersL[id], slantedPlanesL, bestCostsL, nbIndicesL);
 		}
-
-		/*for (int i = 0; i < numTrianglesL; i++) {
+#ifdef PROCESS_RIGHT_VIEW
+		for (int i = 0; i < numTrianglesL; i++) {
 			int id = idListR[i];
 			PropagateAndRandomSearch(id, +1, maxDisp, baryCentersR[id], slantedPlanesR, bestCostsR, nbIndicesR);
-		}*/
-
+		}
+#endif
+		
 		//cv::Mat dispL = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanesL, triPixelListsL);
-		//std::vector<std::pair<std::string, void*>> auxParams;
+		//std::vector<std::pair<std::string, void*>> aux Params;
 		//auxParams.push_back(std::pair<std::string, void*>("triImg", &triImgL));
 		////auxParams.push_back(std::pair<std::string, void*>("slantedPlanesL", &slantedPlanesL));
 		//EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
@@ -473,6 +685,22 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 		std::reverse(idListL.begin(), idListL.end());
 		std::reverse(idListR.begin(), idListR.end());
 	}
+
+#ifdef PROCESS_RIGHT_VIEW
+	
+	cv::Mat dispL = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanesL, triPixelListsL);
+	cv::Mat dispR = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanesR, triPixelListsR);
+	std::vector<std::pair<std::string, void*>> auxParams;
+	auxParams.push_back(std::pair<std::string, void*>("triImg", &triImgL));
+	EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
+	
+	/*PatchMatchOnPixelPostProcess(slantedPlanesL, slantedPlanesR, triPixelListsL, triPixelListsR,
+		imL, imR, dispL, dispR);*/
+	PatchMatchOnTrianglePostProcess(numRows, numCols, slantedPlanesL, slantedPlanesR,
+		baryCentersL, baryCentersR, nbIndicesL, nbIndicesR, triPixelListsL, triPixelListsR, dispL, dispR);
+
+	EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
+#endif
 
 	std::vector<std::vector<SlantedPlane>> candidateLabels;
 	std::vector<std::vector<float>> unaryCosts;

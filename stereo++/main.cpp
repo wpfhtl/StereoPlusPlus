@@ -53,6 +53,14 @@ int main()
 		void TestLBPOnFactorGraph();
 		TestLBPOnFactorGraph();
 		break;
+
+	case 4:
+		printf("\n\n========================================================\n");
+		printf("PROGRAM_ENTRY = %d, invoking TestPatchMatchOnPixels() ...\n", 3);
+		printf("========================================================\n");
+		void TestPatchMatchOnPixels();
+		TestPatchMatchOnPixels();
+		break;
 	}
 	
 	return 0;

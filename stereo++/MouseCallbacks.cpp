@@ -4,15 +4,8 @@
 
 #include "StereoAPI.h"
 #include "BPOnFactorGraph.h"
+#include "ReleaseAssert.h"
 
-
-
-#define ASSERT(condition)								\
-	if (!(condition)) {									\
-		printf("ASSERT %s VIOLATED AT LINE %d, %s\n",	\
-			#condition, __LINE__, __FILE__);			\
-		exit(-1);										\
-	}
 
 
 /* Note: each OnMouse callback function should take a fixed list of parameters.
@@ -40,21 +33,20 @@ void OnMouseEvaluateDisparityDefaultDrawing(int event, int x, int y, int flags, 
 
 
 	int numRows = GT.rows, numCols = GT.cols;
-	int originX = x;
-	int originY = y;
 	x %= numCols;
 	y %= numRows;
 	//cv::Mat tmp = canvas.clone();
 
 	if (event == CV_EVENT_MOUSEMOVE)
 	{
-		cv::Point CC(x + 1 * numCols, originY);
-		cv::Point LL(x + 0 * numCols, originY);
-		cv::Point RR(x + 2 * numCols, originY);
+		cv::Point CC(x + 1 * numCols, y);
+		cv::Point LL(x + 0 * numCols, y);
+		cv::Point RR(x + 2 * numCols, y);
 
-		cv::line(tmp, CC, LL, cv::Scalar(255, 0, 0));
-		cv::line(tmp, CC, RR, cv::Scalar(255, 0, 0));
+		cv::line(tmp, LL, RR, cv::Scalar(255, 0, 0));
+		cv::line(tmp, LL + cv::Point(0, numRows), RR + cv::Point(0, numRows), cv::Scalar(255, 0, 0));
 		cv::circle(tmp, CC, 1, cv::Scalar(0, 0, 255), 2, CV_AA);
+		cv::circle(tmp, CC + cv::Point(0, numRows), 1, cv::Scalar(0, 0, 255), 2, CV_AA);
 
 		float dGT = GT.at<float>(y, x);
 		float dMY = dispL.at<float>(y, x);

@@ -6,6 +6,9 @@
 #include "MCImg.h"
 #include "SlantedPlane.h"
 
+
+
+
 #define SIMVECTORSIZE	50
 
 struct SimVector
@@ -57,5 +60,11 @@ cv::Mat DrawTriangleImage(int numRows, int numCols, std::vector<cv::Point2d> &ve
 
 float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int sign);
 
+void PatchMatchOnPixelPostProcess(MCImg<SlantedPlane> &slantedPlanesL, MCImg<SlantedPlane> &slantedPlanesR,
+	cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR);
+
+cv::Mat SlantedPlaneMapToDisparityMap(MCImg<SlantedPlane> &slantedPlanes);
+
+cv::Mat CrossCheck(cv::Mat &dispL, cv::Mat &dispR, int sign, float thresh = 1.f);
 
 #endif

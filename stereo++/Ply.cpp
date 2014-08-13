@@ -3,13 +3,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include "SlantedPlane.h"
-
-#define ASSERT(condition)								\
-	if (!(condition)) {									\
-		printf("ASSERT %s VIOLATED AT LINE %d, %s\n",	\
-			#condition, __LINE__, __FILE__);			\
-		exit(-1);										\
-	}
+#include "ReleaseAssert.h"
 
 
 static cv::Vec3f CrossProduct(cv::Vec3f& u, cv::Vec3f& v)

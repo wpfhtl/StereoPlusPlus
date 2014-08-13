@@ -58,6 +58,9 @@
     <ClInclude Include="BPOnFactorGraph.h">
       <Filter>LocalMethods</Filter>
     </ClInclude>
+    <ClInclude Include="ReleaseAssert.h">
+      <Filter>utils</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="MatchingCost.cpp">
@@ -115,6 +118,9 @@
       <Filter>LocalMethods</Filter>
     </ClCompile>
     <ClCompile Include="GlobalParams.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="PostProcess.cpp">
       <Filter>LocalMethods</Filter>
     </ClCompile>
   </ItemGroup>

@@ -7,18 +7,15 @@
 #include <vector>
 #include <set>
 #include <algorithm>
+#include <iostream>
 
 #include "MCImg.h"
 #include "StereoAPI.h"
 #include "BPOnFactorGraph.h"
+#include "ReleaseAssert.h"
 
 
-#define ASSERT(condition)								\
-	if (!(condition)) {									\
-		printf("ASSERT %s VIOLATED AT LINE %d, %s\n",	\
-			#condition, __LINE__, __FILE__);			\
-		exit(-1);										\
-	}
+
 
 #define		BOOL_SPLIT		1
 #define		BOOL_NOTSPLIT	0
@@ -771,7 +768,7 @@ void MeshStereoBPOnFG::Run(std::string rootFolder, int maxIters, float tol)
 
 		float maxBeliefDiff = RunNextIteration();
 		//cv::Mat splitMap = DecodeSplitMapFromBeliefs(numRows, numCols, allBeliefs);
-		//cv::Mat splitImg = DecodeSplittingImageFromBeliefs(numRows, numCols, allBeliefs);
+		cv::Mat splitImg = DecodeSplittingImageFromBeliefs(numRows, numCols, allBeliefs);
 		//cv::Mat dispL = DecodeDisparityMapFromBeliefs(numRows, numCols, allBeliefs, triVertexBestLabels, 1);
 
 		//std::vector<std::pair<std::string, void*>> auxParams;
@@ -794,6 +791,8 @@ void MeshStereoBPOnFG::Run(std::string rootFolder, int maxIters, float tol)
 		dispL.convertTo(dispL, CV_8UC3, visualizeScale);
 		char filePath[1024];
 		sprintf(filePath, "d:/data/tmpResults/iter=%d.png", iter);
+
+		cv::hconcat(dispL, splitImg, dispL);
 		cv::imwrite(filePath, dispL);
 	}
 
