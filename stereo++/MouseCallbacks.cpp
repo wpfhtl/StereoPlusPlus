@@ -297,3 +297,27 @@ void OnMouseMeshStereoOnFactorGraph(int event, int x, int y, int flags, void *pa
 	OnMouseEvaluateDisparityDefaultDrawing(event, x, y, flags, (void*)((void**)param + 1), tmpCanvas);
 	cv::imshow("OnMouseMeshStereoOnFactorGraph", tmpCanvas);
 }
+
+void OnMouseGroundTruthPlaneStatistics(int event, int x, int y, int flags, void *param)
+{
+	struct GTStatParams {
+		cv::Mat *labelMap;
+		std::vector<SlantedPlane> *gtPlanes;
+	};
+	GTStatParams &gtStatParams = *(GTStatParams*)param;
+
+	cv::Mat &labelMap = *gtStatParams.labelMap;
+	std::vector<SlantedPlane> &gtPlanes = *gtStatParams.gtPlanes;
+
+	if (event == CV_EVENT_LBUTTONDOWN) 
+	{
+		y %= labelMap.rows;
+		x %= labelMap.cols;
+
+		int segId = labelMap.at<int>(y, x);
+		if (segId > -1) {
+			SlantedPlane p = gtPlanes[segId];
+			printf("(nx, ny, nz) = (%f, %f, %f)\n", p.nx, p.ny, p.nz);
+		}
+	}
+}

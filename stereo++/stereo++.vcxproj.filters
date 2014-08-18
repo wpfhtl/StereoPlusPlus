@@ -17,6 +17,9 @@
     <Filter Include="poly2tri">
       <UniqueIdentifier>{c327f787-526a-4df9-8492-62b20229f255}</UniqueIdentifier>
     </Filter>
+    <Filter Include="gco-v3.0">
+      <UniqueIdentifier>{094b6589-8528-4d54-a29d-f8c9c263dd22}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="MCImg.h">
@@ -60,6 +63,21 @@
     </ClInclude>
     <ClInclude Include="ReleaseAssert.h">
       <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="gco-v3.0\block.h">
+      <Filter>gco-v3.0</Filter>
+    </ClInclude>
+    <ClInclude Include="gco-v3.0\energy.h">
+      <Filter>gco-v3.0</Filter>
+    </ClInclude>
+    <ClInclude Include="gco-v3.0\GCoptimization.h">
+      <Filter>gco-v3.0</Filter>
+    </ClInclude>
+    <ClInclude Include="gco-v3.0\graph.h">
+      <Filter>gco-v3.0</Filter>
+    </ClInclude>
+    <ClInclude Include="gco-v3.0\LinkedBlockList.h">
+      <Filter>gco-v3.0</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -121,6 +139,30 @@
       <Filter>LocalMethods</Filter>
     </ClCompile>
     <ClCompile Include="PostProcess.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="Splitting.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="gco-v3.0\example.cpp">
+      <Filter>gco-v3.0</Filter>
+    </ClCompile>
+    <ClCompile Include="gco-v3.0\GCoptimization.cpp">
+      <Filter>gco-v3.0</Filter>
+    </ClCompile>
+    <ClCompile Include="gco-v3.0\graph.cpp">
+      <Filter>gco-v3.0</Filter>
+    </ClCompile>
+    <ClCompile Include="gco-v3.0\LinkedBlockList.cpp">
+      <Filter>gco-v3.0</Filter>
+    </ClCompile>
+    <ClCompile Include="gco-v3.0\maxflow.cpp">
+      <Filter>gco-v3.0</Filter>
+    </ClCompile>
+    <ClCompile Include="GC.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="GroundTruthStatistics.cpp">
       <Filter>LocalMethods</Filter>
     </ClCompile>
   </ItemGroup>

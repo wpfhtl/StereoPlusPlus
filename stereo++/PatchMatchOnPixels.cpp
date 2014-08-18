@@ -123,8 +123,6 @@ MCImg<float> PrecomputeSimilarityWeights(cv::Mat &img, int patchRadius, int simG
 	return simWeights;
 }
 
-
-
 void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR)
 {
 	int numRows = imL.rows, numCols = imL.cols, numPixels = imL.rows * imL.cols;
@@ -221,10 +219,10 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 	auxParams.push_back(std::pair<std::string, void*>("slantedPlanesL", &slantedPlanesL));
 	auxParams.push_back(std::pair<std::string, void*>("bestCostsL", &bestCostsL));
 	EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams, "OnMousePatchMatchOnPixels");
+
+	slantedPlanesL.SaveToBinaryFile("d:/" + rootFolder + "SlantedPlanesL.bin");
+	slantedPlanesR.SaveToBinaryFile("d:/" + rootFolder + "SlantedPlanesR.bin");
 }
-
-
-
 
 void TestPatchMatchOnPixels()
 {

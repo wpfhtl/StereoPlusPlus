@@ -39,6 +39,9 @@ float						GRADMAXDIFF;
 
 int							PROGRAM_ENTRY;
 
+float						POSTALIGN_TAU1;
+float						POSTALIGN_TAU2;
+
 
 
 
@@ -143,7 +146,14 @@ GlobalParamsInitializer::GlobalParamsInitializer()
 			sscanf(valStr, "%d", &PROGRAM_ENTRY);
 			printf("%20s = %d\n", "PROGRAM_ENTRY", PROGRAM_ENTRY);
 		}
-
+		else if (std::string(keyStr) == "POSTALIGN_TAU1") {
+			sscanf(valStr, "%f", &POSTALIGN_TAU1);
+			printf("%20s = %f\n", "POSTALIGN_TAU1", POSTALIGN_TAU1);
+		}
+		else if (std::string(keyStr) == "POSTALIGN_TAU2") {
+			sscanf(valStr, "%f", &POSTALIGN_TAU2);
+			printf("%20s = %f\n", "POSTALIGN_TAU2", POSTALIGN_TAU2);
+		}
 	}
 	
 	fclose(fid);

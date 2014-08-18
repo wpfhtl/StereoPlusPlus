@@ -103,7 +103,7 @@ static void PropagateAndRandomSearch(int id, int sign, float maxDisp, cv::Point2
 
 }
 
-static void ConstructNeighboringGraph(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds, 
+void ConstructNeighboringTriangleGraph(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds, 
 	std::vector<cv::Point2d> &baryCenters, std::vector<std::vector<int>> &nbIndices)
 {
 	const int numTriangles	= triVertexInds.size();
@@ -229,7 +229,7 @@ static void ConstructNeighboringGraph(int numRows, int numCols, std::vector<cv::
 #endif
 }
 
-static void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords,
+void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords,
 	std::vector<std::vector<int>> &triVertexInds, std::vector<std::vector<cv::Point2i>> &triPixelLists)
 {
 	const cv::Point2d halfOffset(0.5, 0.5);
@@ -273,7 +273,7 @@ static void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Po
 #endif
 }
 
-static cv::Mat TriangleLabelToDisparityMap(int numRows, int numCols, std::vector<SlantedPlane> &slantedPlanes, 
+cv::Mat TriangleLabelToDisparityMap(int numRows, int numCols, std::vector<SlantedPlane> &slantedPlanes, 
 	std::vector<std::vector<cv::Point2i>> &triPixelLists)
 {
 	cv::Mat dispMap(numRows, numCols, CV_32FC1);
@@ -585,9 +585,9 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 
 	std::vector<cv::Point2d> baryCentersL, baryCentersR;
 	std::vector<std::vector<int>> nbIndicesL, nbIndicesR;
-	ConstructNeighboringGraph(numRows, numCols, vertexCoordsL, triVertexIndsL, baryCentersL, nbIndicesL);
+	ConstructNeighboringTriangleGraph(numRows, numCols, vertexCoordsL, triVertexIndsL, baryCentersL, nbIndicesL);
 #ifdef PROCESS_RIGHT_VIEW
-	ConstructNeighboringGraph(numRows, numCols, vertexCoordsR, triVertexIndsR, baryCentersR, nbIndicesR);
+	ConstructNeighboringTriangleGraph(numRows, numCols, vertexCoordsR, triVertexIndsR, baryCentersR, nbIndicesR);
 #endif
 
 	std::vector<std::vector<cv::Point2i>> triPixelListsL, triPixelListsR;

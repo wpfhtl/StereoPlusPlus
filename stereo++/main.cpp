@@ -2,6 +2,8 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
+#include <iostream>
+
 #include "StereoAPI.h"
 
 #ifdef _DEBUG
@@ -23,7 +25,16 @@
 #endif
 
 
-#include <iostream>
+
+
+#if 1
+
+static void PrintProgramEntryHeader(std::string methodName, int id)
+{
+	printf("\n\n========================================================\n");
+	printf("PROGRAM_ENTRY = %d, invoking %s() ...\n", id, methodName.c_str());
+	printf("========================================================\n");
+}
 
 int main()
 {
@@ -31,38 +42,47 @@ int main()
 
 	switch (PROGRAM_ENTRY) {
 	case 1:
-		printf("\n\n========================================================\n");
-		printf("PROGRAM_ENTRY = %d, invoking TestPatchMatchOnTriangles() ...\n", 1);
-		printf("========================================================\n");
+		PrintProgramEntryHeader("TestPatchMatchOnTriangles", 1);
 		void TestPatchMatchOnTriangles();
 		TestPatchMatchOnTriangles();
 		break;
 
 	case 2:
-		printf("\n\n========================================================\n");
-		printf("PROGRAM_ENTRY = %d, invoking TestLBPOnGridGraph() ...\n", 2);
-		printf("========================================================\n");
+		PrintProgramEntryHeader("TestLBPOnGridGraph", 2);
 		void TestLBPOnGridGraph();
 		TestLBPOnGridGraph();
 		break;
 
 	case 3:
-		printf("\n\n========================================================\n");
-		printf("PROGRAM_ENTRY = %d, invoking TestLBPOnFactorGraph() ...\n", 3);
-		printf("========================================================\n");
+		PrintProgramEntryHeader("TestLBPOnFactorGraph", 3);
 		void TestLBPOnFactorGraph();
 		TestLBPOnFactorGraph();
 		break;
 
 	case 4:
-		printf("\n\n========================================================\n");
-		printf("PROGRAM_ENTRY = %d, invoking TestPatchMatchOnPixels() ...\n", 3);
-		printf("========================================================\n");
+		PrintProgramEntryHeader("TestPatchMatchOnPixels", 4);
 		void TestPatchMatchOnPixels();
 		TestPatchMatchOnPixels();
 		break;
+
+	case 5:
+		PrintProgramEntryHeader("TestSplittingPostProcess", 5);
+		void TestSplittingPostProcess();
+		TestSplittingPostProcess();
+		break;
+
+	case 6:
+		PrintProgramEntryHeader("TestMRFStereoByGraphCut", 6);
+		void TestMRFStereoByGraphCut();
+		TestMRFStereoByGraphCut();
+		break;
+
+	case 7:
+		PrintProgramEntryHeader("TestGroundTruthPlaneStatistics", 7);
+		void TestGroundTruthPlaneStatistics();
+		TestGroundTruthPlaneStatistics();
 	}
 	
 	return 0;
 }
-
+#endif

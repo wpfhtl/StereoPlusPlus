@@ -68,18 +68,20 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
+    <IncludePath>D:\code\stereo++\stereo++;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>D:\code\opencv\build\include;$(IncludePath)</IncludePath>
+    <IncludePath>D:\code\stereo++\stereo++;$(IncludePath)</IncludePath>
     <LibraryPath>D:\code\opencv\build\x64\vc12\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
+    <IncludePath>D:\code\stereo++\stereo++;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>D:\code\opencv\build\include;$(IncludePath)</IncludePath>
+    <IncludePath>D:\code\stereo++\stereo++;D:\code\opencv\build\include;$(IncludePath)</IncludePath>
     <LibraryPath>D:\code\opencv\build\x64\vc12\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -149,6 +151,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="BPOnFactorGraph.h" />
+    <ClInclude Include="gco-v3.0\block.h" />
+    <ClInclude Include="gco-v3.0\energy.h" />
+    <ClInclude Include="gco-v3.0\GCoptimization.h" />
+    <ClInclude Include="gco-v3.0\graph.h" />
+    <ClInclude Include="gco-v3.0\LinkedBlockList.h" />
     <ClInclude Include="MCImg.h" />
     <ClInclude Include="poly2tri\common\shapes.h" />
     <ClInclude Include="poly2tri\common\utils.h" />
@@ -167,7 +174,14 @@
     <ClCompile Include="BP.cpp" />
     <ClCompile Include="BPOnFactorGraph.cpp" />
     <ClCompile Include="Evaluation.cpp" />
+    <ClCompile Include="GC.cpp" />
+    <ClCompile Include="gco-v3.0\example.cpp" />
+    <ClCompile Include="gco-v3.0\GCoptimization.cpp" />
+    <ClCompile Include="gco-v3.0\graph.cpp" />
+    <ClCompile Include="gco-v3.0\LinkedBlockList.cpp" />
+    <ClCompile Include="gco-v3.0\maxflow.cpp" />
     <ClCompile Include="GlobalParams.cpp" />
+    <ClCompile Include="GroundTruthStatistics.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MatchingCost.cpp" />
     <ClCompile Include="MouseCallbacks.cpp" />
@@ -182,6 +196,7 @@
     <ClCompile Include="PostProcess.cpp" />
     <ClCompile Include="SelfSimilarityPropagation.cpp" />
     <ClCompile Include="SLIC\SLIC.cpp" />
+    <ClCompile Include="Splitting.cpp" />
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="Triangulate2D.cpp" />
   </ItemGroup>

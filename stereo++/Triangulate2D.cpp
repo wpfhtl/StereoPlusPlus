@@ -630,7 +630,7 @@ static cv::Mat TriangulateSLICSegments(cv::Mat& labelMap, int numSeg, int mergeR
 	return canvas;
 }
 
-static int SLICSegmentation(const cv::Mat &img, const int numPreferedRegions, const int compactness, cv::Mat& labelMap, cv::Mat& contourImg)
+int SLICSegmentation(const cv::Mat &img, const int numPreferedRegions, const int compactness, cv::Mat& labelMap, cv::Mat& contourImg)
 {
 	int numRows = img.rows;
 	int numCols = img.cols;
