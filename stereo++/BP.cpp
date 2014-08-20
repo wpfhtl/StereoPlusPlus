@@ -228,7 +228,7 @@ static cv::Mat RunLoopyBPOnGrideGraph(std::string rootFolder, MCImg<float> &unar
 		int numPixels = pixelList.size();
 
 		// update messages
-		//#pragma omp parallel for
+		#pragma omp parallel for
 		for (int i = 0; i < numPixels; i++) {
 			if (i % 1000 == 0) {
 				//printf("i = %d\n", i);
@@ -276,36 +276,7 @@ void RunLoopyBP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	int numRows = imL.rows, numCols = imL.cols;
 	int numDisps, maxDisp, visualizeScale;
 	SetupStereoParameters(rootFolder, numDisps, maxDisp, visualizeScale);
-
-	if (gMatchingCostType == ADCENSUS) {
-		gDsiL = ComputeAdCensusCostVolume(imL, imR, numDisps, -1, GRANULARITY);
-		//gDsiR = ComputeAdCensusCostVolume(imR, imL, numDisps, +1, GRANULARITY);
-	}
-	else if (gMatchingCostType == ADGRADIENT) {
-		gDsiL = ComputeAdGradientCostVolume(imL, imR, numDisps, -1, GRANULARITY);
-		//gDsiR = ComputeAdGradientCostVolume(imR, imL, numDisps, +1, GRANULARITY);
-	}
-
-	std::vector<SimVector> simVecsStdL;
-	std::vector<SimVector> simVecsStdR;
-
-	if (gCostAggregationType == GRID) {
-		bs::Timer::Tic("Precompute Similarity Weights");
-		MCImg<float> PrecomputeSimilarityWeights(cv::Mat &img, int patchRadius, int simGamma);
-		gSimWeightsL = PrecomputeSimilarityWeights(imL, PATCHRADIUS, SIMILARITY_GAMMA);
-		//gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITY_GAMMA);
-		bs::Timer::Toc();
-	}
-	else if (gCostAggregationType == TOP50) {
-		bs::Timer::Tic("Begin SelfSimilarityPropagation");
-		SelfSimilarityPropagation(imL, simVecsStdL);
-		//SelfSimilarityPropagation(imR, simVecsStdR);
-		InitSimVecWeights(imL, simVecsStdL);
-		//InitSimVecWeights(imR, simVecsStdR);
-		gSimVecsL = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdL[0]);
-		//gSimVecsR = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdR[0]);
-		bs::Timer::Toc();
-	}
+	InitGlobalDsiAndSimWeights(imL, imR, numDisps);
 
 	MCImg<float> unaryCosts(numRows, numCols, numDisps);
 #if 1
@@ -332,7 +303,7 @@ void RunLoopyBP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	//cv::imshow("dark is useless", uselessCost);
 	//cv::waitKey(0);
 #else
-	//#pragma omp parallel for
+	#pragma omp parallel for
 	for (int y = 0; y < numRows; y++) {
 		for (int x = 0; x < numCols; x++) {
 			for (int d = 0; d < numDisps; d++) {

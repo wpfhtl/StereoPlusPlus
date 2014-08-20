@@ -7,6 +7,7 @@
 #include "SlantedPlane.h"
 #include "StereoAPI.h"
 #include "ReleaseAssert.h"
+#include "Timer.h"
 
 
 
@@ -327,3 +328,37 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 	return totalCost / accWeight;
 }
 
+void InitGlobalDsiAndSimWeights(cv::Mat &imL, cv::Mat &imR, int numDisps)
+{
+	extern float SIMILARITY_GAMMA;
+	int numRows = imL.rows, numCols = imL.cols;
+	if (gMatchingCostType == ADCENSUS) {
+		gDsiL = ComputeAdCensusCostVolume(imL, imR, numDisps, -1, GRANULARITY);
+		gDsiR = ComputeAdCensusCostVolume(imR, imL, numDisps, +1, GRANULARITY);
+	}
+	else if (gMatchingCostType == ADGRADIENT) {
+		gDsiL = ComputeAdGradientCostVolume(imL, imR, numDisps, -1, GRANULARITY);
+		gDsiR = ComputeAdGradientCostVolume(imR, imL, numDisps, +1, GRANULARITY);
+	}
+
+	std::vector<SimVector> simVecsStdL;
+	std::vector<SimVector> simVecsStdR;
+
+	if (gCostAggregationType == GRID) {
+		bs::Timer::Tic("Precompute Similarity Weights");
+		MCImg<float> PrecomputeSimilarityWeights(cv::Mat &img, int patchRadius, int simGamma);
+		gSimWeightsL = PrecomputeSimilarityWeights(imL, PATCHRADIUS, SIMILARITY_GAMMA);
+		gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITY_GAMMA);
+		bs::Timer::Toc();
+	}
+	else if (gCostAggregationType == TOP50) {
+		bs::Timer::Tic("Begin SelfSimilarityPropagation");
+		SelfSimilarityPropagation(imL, simVecsStdL);
+		InitSimVecWeights(imL, simVecsStdL);
+		gSimVecsL = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdL[0]);
+		SelfSimilarityPropagation(imR, simVecsStdR);
+		InitSimVecWeights(imR, simVecsStdR);
+		gSimVecsR = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdR[0]);
+		bs::Timer::Toc();
+	}
+}

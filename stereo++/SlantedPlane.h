@@ -50,16 +50,9 @@ struct SlantedPlane {
 	}
 	static SlantedPlane ConstructFromRandomInit(float y, float x, float maxDisp)
 	{
-		static int cnt = 0;
-
 		const int RAND_HALF = RAND_MAX / 2;
-		int tmp = rand();
-		cnt++;
-		if (cnt < 5) {
-			printf("%d\n", tmp);
-		}
-		
-		float z = maxDisp * ((double)tmp / RAND_MAX);
+
+		float z = maxDisp * ((double)rand() / RAND_MAX);
 		float nx = ((float)rand() - RAND_HALF) / RAND_HALF;
 		float ny = ((float)rand() - RAND_HALF) / RAND_HALF;
 		float nz = ((float)rand() - RAND_HALF) / RAND_HALF;

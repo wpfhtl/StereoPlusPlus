@@ -132,7 +132,8 @@ void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f,
 	badRateOnNonocc /= numPixelsOnNonocc;
 	badRateOnAll    /= numPixelsOnAll;
 	badRateOnDisc	/= numPixelsOnDisc;
-
+	printf("%10.6f %10.6f %10.6f\n",
+		100 * badRateOnNonocc, 100 * badRateOnAll, 100 * badRateOnDisc);
 	
 	// Step 3 - Prepare images for canvas
 	cv::Mat canvas, topRow, bottomRow, gtImg, dispImg;
@@ -154,14 +155,6 @@ void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f,
 			auxParams.erase(auxParams.begin());
 		}
 	}
-
-	FILE *fid = fopen("d:/output.txt", "a");
-	printf("%10.6f %10.6f %10.6f\n",
-		100 * badRateOnNonocc, 100 * badRateOnAll, 100 * badRateOnDisc);
-	fprintf(fid, "%10.6f %10.6f %10.6f\n",
-		100 * badRateOnNonocc, 100 * badRateOnAll, 100 * badRateOnDisc);
-	fclose(fid);
-	return;
 
 	// step 4 - Invoke mouse callbacks
 	void *callbackParams[] = { 

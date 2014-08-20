@@ -68,4 +68,6 @@ cv::Mat SlantedPlaneMapToDisparityMap(MCImg<SlantedPlane> &slantedPlanes);
 cv::Mat CrossCheck(cv::Mat &dispL, cv::Mat &dispR, int sign, float thresh = 1.f);
 
 int SLICSegmentation(const cv::Mat &img, const int numPreferedRegions, const int compactness, cv::Mat& labelMap, cv::Mat& contourImg);
+
+void InitGlobalDsiAndSimWeights(cv::Mat &imL, cv::Mat &imR, int numDisps);
 #endif

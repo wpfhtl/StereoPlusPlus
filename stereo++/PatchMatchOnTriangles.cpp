@@ -580,6 +580,7 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 	int numRows = imL.rows, numCols = imL.cols;
 	int numDisps, maxDisp, visualizeScale;
 	SetupStereoParameters(rootFolder, numDisps, maxDisp, visualizeScale);
+	InitGlobalDsiAndSimWeights(imL, imR, numDisps);
 
 	std::vector<cv::Point2d> vertexCoordsL, vertexCoordsR;
 	std::vector<std::vector<int>> triVertexIndsL, triVertexIndsR;
@@ -600,36 +601,7 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 	int numTrianglesR = baryCentersR.size();
 	std::vector<SlantedPlane> slantedPlanesL(numTrianglesL), slantedPlanesR(numTrianglesR);
 	std::vector<float> bestCostsL(numTrianglesL), bestCostsR(numTrianglesR);
-
-	if (gMatchingCostType == ADCENSUS) {
-		gDsiL = ComputeAdCensusCostVolume(imL, imR, numDisps, -1, GRANULARITY);
-		gDsiR = ComputeAdCensusCostVolume(imR, imL, numDisps, +1, GRANULARITY);
-	}
-	else if (gMatchingCostType == ADGRADIENT) {
-		gDsiL = ComputeAdGradientCostVolume(imL, imR, numDisps, -1, GRANULARITY);
-		gDsiR = ComputeAdGradientCostVolume(imR, imL, numDisps, +1, GRANULARITY);
-	}
-
-	std::vector<SimVector> simVecsStdL;
-	std::vector<SimVector> simVecsStdR;
-
-	if (gCostAggregationType == GRID) {
-		bs::Timer::Tic("Precompute Similarity Weights");
-		MCImg<float> PrecomputeSimilarityWeights(cv::Mat &img, int patchRadius, int simGamma);
-		gSimWeightsL = PrecomputeSimilarityWeights(imL, PATCHRADIUS, SIMILARITY_GAMMA);
-		gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITY_GAMMA);
-		bs::Timer::Toc();
-	}
-	else if (gCostAggregationType == TOP50) {
-		bs::Timer::Tic("Begin SelfSimilarityPropagation");
-		SelfSimilarityPropagation(imL, simVecsStdL);
-		InitSimVecWeights(imL, simVecsStdL);
-		gSimVecsL = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdL[0]);
-		SelfSimilarityPropagation(imR, simVecsStdR);
-		InitSimVecWeights(imR, simVecsStdR);
-		gSimVecsR = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdR[0]);	
-		bs::Timer::Toc();
-	}
+	
 
 	for (int id = 0; id < numTrianglesL; id++) {
 		slantedPlanesL[id] = SlantedPlane::ConstructFromRandomInit(baryCentersL[id].y, baryCentersL[id].x, maxDisp);
@@ -648,8 +620,6 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 		idListR[i] = i;
 	}
 	 
-
-	
 
 
 	for (int round = 0; round < 4/*MAX_PATCHMATCH_ITERS*/; round++) {
@@ -680,7 +650,7 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 	cv::Mat dispR = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanesR, triPixelListsR);
 	std::vector<std::pair<std::string, void*>> auxParams;
 	auxParams.push_back(std::pair<std::string, void*>("triImg", &triImgL));
-	//EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
+	EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
 
 	/*PatchMatchOnPixelPostProcess(slantedPlanesL, slantedPlanesR, triPixelListsL, triPixelListsR,
 	imL, imR, dispL, dispR);*/

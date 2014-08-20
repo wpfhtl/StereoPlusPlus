@@ -86,7 +86,7 @@ static void PatchMatchRandomInit(MCImg<SlantedPlane> &slantedPlanes, cv::Mat &be
 		}
 	}
 
-	//#pragma omp parallel for
+	#pragma omp parallel for
 	for (int y = 0; y < numRows; y++) {
 		for (int x = 0; x < numCols; x++) {
 			bestCosts.at<float>(y, x) = PatchMatchSlantedPlaneCost(y, x, slantedPlanes[y][x], sign);
@@ -128,42 +128,13 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 	int numRows = imL.rows, numCols = imL.cols, numPixels = imL.rows * imL.cols;
 	int numDisps, maxDisp, visualizeScale;
 	SetupStereoParameters(rootFolder, numDisps, maxDisp, visualizeScale);
+	InitGlobalDsiAndSimWeights(imL, imR, numDisps);
 
 	MCImg<SlantedPlane> slantedPlanesL(numRows, numCols);
 	MCImg<SlantedPlane> slantedPlanesR(numRows, numCols);
 
 	cv::Mat bestCostsL(imL.size(), CV_32FC1);
 	cv::Mat bestCostsR(imL.size(), CV_32FC1);
-
-	if (gMatchingCostType == ADCENSUS) {
-		gDsiL = ComputeAdCensusCostVolume(imL, imR, numDisps, -1, GRANULARITY);
-		gDsiR = ComputeAdCensusCostVolume(imR, imL, numDisps, +1, GRANULARITY);
-	}
-	else if (gMatchingCostType == ADGRADIENT) {
-		gDsiL = ComputeAdGradientCostVolume(imL, imR, numDisps, -1, GRANULARITY);
-		gDsiR = ComputeAdGradientCostVolume(imR, imL, numDisps, +1, GRANULARITY);
-	}
-
-	std::vector<SimVector> simVecsStdL;
-	std::vector<SimVector> simVecsStdR;
-
-	if (gCostAggregationType == GRID) {
-		bs::Timer::Tic("Precompute Similarity Weights");
-		gSimWeightsL = PrecomputeSimilarityWeights(imL, PATCHRADIUS, SIMILARITY_GAMMA);
-		gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITY_GAMMA);
-		bs::Timer::Toc();
-	}
-	else if (gCostAggregationType == TOP50) {
-		bs::Timer::Tic("Begin SelfSimilarityPropagation");
-		SelfSimilarityPropagation(imL, simVecsStdL);
-		SelfSimilarityPropagation(imR, simVecsStdR);
-		InitSimVecWeights(imL, simVecsStdL);
-		InitSimVecWeights(imR, simVecsStdR);
-		gSimVecsL = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdL[0]);
-		gSimVecsR = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdR[0]);
-		bs::Timer::Toc();
-	}
-
 
 
 
@@ -186,7 +157,7 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 	for (int round = 0; round < MAX_PATCHMATCH_ITERS; round++) {
 
 		bs::Timer::Tic("Left View");
-		//#pragma omp parallel for
+		#pragma omp parallel for
 		for (int id = 0; id < numPixels; id++) {
 			PropagateAndRandomSearch(round, -1, maxDisp, pixelList[id],
 				slantedPlanesL, slantedPlanesR, bestCostsL, bestCostsR);
@@ -194,7 +165,7 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 		bs::Timer::Toc();
 
 		bs::Timer::Tic("Right View");
-		//#pragma omp parallel for
+		#pragma omp parallel for
 		for (int id = 0; id < numPixels; id++) {
 			PropagateAndRandomSearch(round, +1, maxDisp, pixelList[id],
 				slantedPlanesR, slantedPlanesL, bestCostsR, bestCostsL);
