@@ -36,6 +36,14 @@ extern MCImg<SimVector>		gSimVecsR;
 
 
 
+//void SaveStdVector(std::string filePath, std::vector<SlantedPlane> &slantedPlanes)
+//{
+//	int numPlanes = slantedPlanes.size();
+//	FILE *fid = fopen(filePath.c_str(), "wb");
+//	fwrite(&slantedPlanes[0], sizeof(SlantedPlane), numPlanes, fid);
+//	fclose(fid);
+//}
+
 struct SortByRowCoord {
 	bool operator ()(const std::pair<cv::Point2d, int> &a, const std::pair<cv::Point2d, int> &b) const {
 		return a.first.y < b.first.y;
@@ -103,11 +111,12 @@ static void PropagateAndRandomSearch(int id, int sign, float maxDisp, cv::Point2
 
 }
 
-void ConstructNeighboringTriangleGraph(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds, 
-	std::vector<cv::Point2d> &baryCenters, std::vector<std::vector<int>> &nbIndices)
+void ConstructNeighboringTriangleGraph(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords, 
+	std::vector<std::vector<int>> &triVertexInds, std::vector<cv::Point2d> &baryCenters, 
+	std::vector<std::vector<int>> &nbIndices)
 {
-	const int numTriangles	= triVertexInds.size();
-	const int numVertices	= vertexCoords.size();
+	const int numTriangles = triVertexInds.size();
+	const int numVertices = vertexCoords.size();
 
 	printf("numVertices = %d\n", numVertices);
 	printf("numTriangles = %d\n", numTriangles);
@@ -194,7 +203,7 @@ void ConstructNeighboringTriangleGraph(int numRows, int numCols, std::vector<cv:
 		}
 	}
 
-	
+
 	// Output some statistics of the neighboring graph
 	int total = 0, cnt = 0;
 	for (int i = 0; i < triIndSets.size(); i++) {
@@ -235,7 +244,7 @@ void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Point2d> 
 	const cv::Point2d halfOffset(0.5, 0.5);
 	int numTriangles = triVertexInds.size();
 	triPixelLists.resize(numTriangles);
-	
+
 	for (int i = 0; i < numTriangles; i++) {
 		cv::Point2d &a = vertexCoords[triVertexInds[i][0]];
 		cv::Point2d &b = vertexCoords[triVertexInds[i][1]];
@@ -245,7 +254,7 @@ void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Point2d> 
 		int xR = std::max(a.x, b.x); xR = std::max((double)xR, c.x);
 		int yU = std::min(a.y, b.y); yU = std::min((double)yU, c.y);
 		int yD = std::max(a.y, b.y); yD = std::max((double)yD, c.y);
-	
+
 		for (int y = std::max(0, yU); y < yD && y < numRows; y++) {
 			for (int x = std::max(0, xL); x < xR && x < numCols; x++) {
 				if (PointInTriangle(cv::Point2d(x, y) + halfOffset, a, b, c)) {
@@ -254,7 +263,7 @@ void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Point2d> 
 			}
 		}
 	}
-	
+
 #if 0
 	// test and verify the ownership
 	cv::Mat canvas(numRows, numCols, CV_8UC3);
@@ -273,7 +282,7 @@ void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Point2d> 
 #endif
 }
 
-cv::Mat TriangleLabelToDisparityMap(int numRows, int numCols, std::vector<SlantedPlane> &slantedPlanes, 
+cv::Mat TriangleLabelToDisparityMap(int numRows, int numCols, std::vector<SlantedPlane> &slantedPlanes,
 	std::vector<std::vector<cv::Point2i>> &triPixelLists)
 {
 	cv::Mat dispMap(numRows, numCols, CV_32FC1);
@@ -288,8 +297,8 @@ cv::Mat TriangleLabelToDisparityMap(int numRows, int numCols, std::vector<Slante
 	return dispMap;
 }
 
-static void GenerateMeshStereoCandidateLabels(int numRows, int numCols, int numDisps, std::vector<cv::Point2d> &baryCenters, 
-	std::vector<SlantedPlane> &slantedPlanes, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds, 
+static void GenerateMeshStereoCandidateLabels(int numRows, int numCols, int numDisps, std::vector<cv::Point2d> &baryCenters,
+	std::vector<SlantedPlane> &slantedPlanes, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
 	std::vector<std::vector<int>> &nbIndices, std::vector<std::vector<SlantedPlane>> &candidateLabels, std::vector<std::vector<float>> &unaryCosts)
 {
 	int numTriangles = baryCenters.size();
@@ -376,12 +385,12 @@ static void GenerateMeshStereoCandidateLabels(int numRows, int numCols, int numD
 	}
 }
 
-static std::vector<float> DetermineTriangleConfidence(cv::Mat &validPixelMap, std::vector<std::vector<cv::Point2i>> &triPixelLists)
+static std::vector<float> DetermineConfidence(cv::Mat &validPixelMap, std::vector<std::vector<cv::Point2i>> &segPixelLists)
 {
-	int numTriangles = triPixelLists.size();
-	std::vector<float> confidence(numTriangles);
-	for (int id = 0; id < numTriangles; id++) {
-		std::vector<cv::Point2i> &pixelList = triPixelLists[id];
+	int numSegs = segPixelLists.size();
+	std::vector<float> confidence(numSegs);
+	for (int id = 0; id < numSegs; id++) {
+		std::vector<cv::Point2i> &pixelList = segPixelLists[id];
 		int numValidPixels = 0;
 		for (int i = 0; i < pixelList.size(); i++) {
 			cv::Point2i &p = pixelList[i];
@@ -394,15 +403,14 @@ static std::vector<float> DetermineTriangleConfidence(cv::Mat &validPixelMap, st
 	return confidence;
 }
 
-#if 0
-static void TriangleOcclusionFilling(std::vector<SlantedPlane> &slantedPlanes, std::vector<cv::Point2d> &baryCenters, 
+static void SegmentOcclusionFilling(std::vector<SlantedPlane> &slantedPlanes, std::vector<cv::Point2d> &baryCenters,
 	std::vector<std::vector<int>> &nbIndices, std::vector<float> &confidence)
 {
 	const float LOW_CONF_THRESH = 0.5f;
 	const float HIGH_CONF_THRESH = 0.8f;
-	int numTriangles = slantedPlanes.size();
+	int numSegs = slantedPlanes.size();
 
-	for (int id = 0; id < numTriangles; id++) {
+	for (int id = 0; id < numSegs; id++) {
 		if (confidence[id] < LOW_CONF_THRESH) {
 
 			float lowestDisp = FLT_MAX;
@@ -426,27 +434,26 @@ static void TriangleOcclusionFilling(std::vector<SlantedPlane> &slantedPlanes, s
 		}
 	}
 }
-#else
-static void TriangleOcclusionFilling(int numRows, int numCols, std::vector<SlantedPlane> &slantedPlanes, 
-	std::vector<cv::Point2d> &baryCenters, std::vector<std::vector<int>> &nbIndices, 
-	std::vector<float> &confidence, std::vector<std::vector<cv::Point2i>> &triPixelLists)
+
+static void SegmentOcclusionFilling(int numRows, int numCols, std::vector<SlantedPlane> &slantedPlanes,
+	std::vector<cv::Point2d> &baryCenters, std::vector<std::vector<int>> &nbIndices,
+	std::vector<float> &confidence, std::vector<std::vector<cv::Point2i>> &segPixelLists)
 {
-	const float LOW_CONF_THRESH		= 0.4f;
-	const float HIGH_CONF_THRESH	= 0.8;
-	int numTriangles = slantedPlanes.size();
+	const float LOW_CONF_THRESH = 0.4f;
+	const float HIGH_CONF_THRESH = 0.8;
+	int numSegs = slantedPlanes.size();
 
 	cv::Mat ownerMap(numRows, numCols, CV_32SC1);
 	ownerMap.setTo(-1);
-	for (int id = 0; id < numTriangles; id++) {
-		std::vector<cv::Point2i> &pixelList = triPixelLists[id];
+	for (int id = 0; id < numSegs; id++) {
+		std::vector<cv::Point2i> &pixelList = segPixelLists[id];
 		for (int k = 0; k < pixelList.size(); k++) {
 			cv::Point2i &p = pixelList[k];
 			ownerMap.at<int>(p.y, p.x) = id;
 		}
 	}
 
-
-	for (int id = 0; id < numTriangles; id++) {
+	for (int id = 0; id < numSegs; id++) {
 		if (confidence[id] < LOW_CONF_THRESH) {
 
 			int yc = baryCenters[id].y + 0.5;
@@ -481,20 +488,20 @@ static void TriangleOcclusionFilling(int numRows, int numCols, std::vector<Slant
 		}
 	}
 }
-#endif
 
-static cv::Mat DrawTriangleConfidenceMap(int numRows, int numCols, std::vector<float> &confidence, std::vector<std::vector<cv::Point2i>> &triPixelLists)
+static cv::Mat DrawSegmentConfidenceMap(int numRows, int numCols, std::vector<float> &confidence,
+	std::vector<std::vector<cv::Point2i>> &segPixelLists)
 {
-	ASSERT(confidence.size() == triPixelLists.size());
+	ASSERT(confidence.size() == segPixelLists.size());
 	cv::Mat confidenceMap(numRows, numCols, CV_32FC1);
 	confidenceMap.setTo(0.f);
-	int numTriangles = confidence.size();
-	for (int id = 0; id < numTriangles; id++) {
-		std::vector<cv::Point2i> &pixelList = triPixelLists[id];
+	int numSegs = confidence.size();
+	for (int id = 0; id < numSegs; id++) {
+		std::vector<cv::Point2i> &pixelList = segPixelLists[id];
 		for (int k = 0; k < pixelList.size(); k++) {
 			cv::Point2i &p = pixelList[k];
 			ASSERT(InBound(p.y, p.x, numRows, numCols))
-			confidenceMap.at<float>(p.y, p.x) = confidence[id];
+				confidenceMap.at<float>(p.y, p.x) = confidence[id];
 		}
 	}
 	cv::cvtColor(confidenceMap, confidenceMap, CV_GRAY2BGR);
@@ -503,10 +510,10 @@ static cv::Mat DrawTriangleConfidenceMap(int numRows, int numCols, std::vector<f
 }
 
 void PatchMatchOnTrianglePostProcess(int numRows, int numCols,
-	std::vector<SlantedPlane> &slantedPlanesL,				std::vector<SlantedPlane> &slantedPlanesR,
-	std::vector<cv::Point2d> &baryCentersL,					std::vector<cv::Point2d> &baryCentersR,
-	std::vector<std::vector<int>>& nbIndicesL,				std::vector<std::vector<int>>& nbIndicesR,
-	std::vector<std::vector<cv::Point2i>> &triPixelListsL,	std::vector<std::vector<cv::Point2i>> &triPixelListsR,
+	std::vector<SlantedPlane> &slantedPlanesL, std::vector<SlantedPlane> &slantedPlanesR,
+	std::vector<cv::Point2d> &baryCentersL, std::vector<cv::Point2d> &baryCentersR,
+	std::vector<std::vector<int>>& nbIndicesL, std::vector<std::vector<int>>& nbIndicesR,
+	std::vector<std::vector<cv::Point2i>> &triPixelListsL, std::vector<std::vector<cv::Point2i>> &triPixelListsR,
 	cv::Mat &dispL, cv::Mat &dispR)
 {
 	// Step 1 - CrossCheck
@@ -516,17 +523,16 @@ void PatchMatchOnTrianglePostProcess(int numRows, int numCols,
 	cv::Mat validPixelMapL = CrossCheck(dispL, dispR, -1);
 	cv::Mat validPixelMapR = CrossCheck(dispR, dispL, +1);
 
-	std::vector<float> confidenceL = DetermineTriangleConfidence(validPixelMapL, triPixelListsL);
-	std::vector<float> confidenceR = DetermineTriangleConfidence(validPixelMapR, triPixelListsR);
+	std::vector<float> confidenceL = DetermineConfidence(validPixelMapL, triPixelListsL);
+	std::vector<float> confidenceR = DetermineConfidence(validPixelMapR, triPixelListsR);
 
-	cv::Mat confidenceImgL = DrawTriangleConfidenceMap(numRows, numCols, confidenceL, triPixelListsL);
+	cv::Mat confidenceImgL = DrawSegmentConfidenceMap(numRows, numCols, confidenceL, triPixelListsL);
 	//cv::imshow("confidenceL", confidenceImgL);
 
 	// Step 2 - Occlusion Filling
 	// Replace the low-confidence triangles with their high-confidence neighbors
-	TriangleOcclusionFilling(numRows, numCols, slantedPlanesL, baryCentersL, nbIndicesL, confidenceL, triPixelListsL);
-	TriangleOcclusionFilling(numRows, numCols, slantedPlanesR, baryCentersR, nbIndicesR, confidenceR, triPixelListsR);
-	
+	SegmentOcclusionFilling(numRows, numCols, slantedPlanesL, baryCentersL, nbIndicesL, confidenceL, triPixelListsL);
+	SegmentOcclusionFilling(numRows, numCols, slantedPlanesR, baryCentersR, nbIndicesR, confidenceR, triPixelListsR);
 
 	// Step 3 - WMF
 	// Finally, an optional pixelwise filtering
@@ -542,8 +548,8 @@ void PatchMatchOnTrianglePostProcess(int numRows, int numCols,
 }
 
 
-void PatchMatchOnPixelPostProcess(std::vector<SlantedPlane> &slantedPlanesL, std::vector<SlantedPlane> &slantedPlanesR, 
-	std::vector<std::vector<cv::Point2i>> &triPixelListsL, std::vector<std::vector<cv::Point2i>> &triPixelListsR, 
+void PatchMatchOnPixelPostProcess(std::vector<SlantedPlane> &slantedPlanesL, std::vector<SlantedPlane> &slantedPlanesR,
+	std::vector<std::vector<cv::Point2i>> &triPixelListsL, std::vector<std::vector<cv::Point2i>> &triPixelListsR,
 	cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR)
 {
 	int numRows = imL.rows, numCols = imL.cols;
@@ -578,23 +584,17 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 	std::vector<cv::Point2d> vertexCoordsL, vertexCoordsR;
 	std::vector<std::vector<int>> triVertexIndsL, triVertexIndsR;
 	Triangulate2DImage(imL, vertexCoordsL, triVertexIndsL);
-#ifdef PROCESS_RIGHT_VIEW
 	Triangulate2DImage(imR, vertexCoordsR, triVertexIndsR);
-#endif
 	cv::Mat triImgL = DrawTriangleImage(numRows, numCols, vertexCoordsL, triVertexIndsL);
 
 	std::vector<cv::Point2d> baryCentersL, baryCentersR;
 	std::vector<std::vector<int>> nbIndicesL, nbIndicesR;
 	ConstructNeighboringTriangleGraph(numRows, numCols, vertexCoordsL, triVertexIndsL, baryCentersL, nbIndicesL);
-#ifdef PROCESS_RIGHT_VIEW
 	ConstructNeighboringTriangleGraph(numRows, numCols, vertexCoordsR, triVertexIndsR, baryCentersR, nbIndicesR);
-#endif
 
 	std::vector<std::vector<cv::Point2i>> triPixelListsL, triPixelListsR;
 	DeterminePixelOwnership(numRows, numCols, vertexCoordsL, triVertexIndsL, triPixelListsL);
-#ifdef PROCESS_RIGHT_VIEW
 	DeterminePixelOwnership(numRows, numCols, vertexCoordsR, triVertexIndsR, triPixelListsR);
-#endif
 
 	int numTrianglesL = baryCentersL.size();
 	int numTrianglesR = baryCentersR.size();
@@ -603,15 +603,11 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 
 	if (gMatchingCostType == ADCENSUS) {
 		gDsiL = ComputeAdCensusCostVolume(imL, imR, numDisps, -1, GRANULARITY);
-#ifdef PROCESS_RIGHT_VIEW
 		gDsiR = ComputeAdCensusCostVolume(imR, imL, numDisps, +1, GRANULARITY);
-#endif
 	}
 	else if (gMatchingCostType == ADGRADIENT) {
 		gDsiL = ComputeAdGradientCostVolume(imL, imR, numDisps, -1, GRANULARITY);
-#ifdef PROCESS_RIGHT_VIEW
 		gDsiR = ComputeAdGradientCostVolume(imR, imL, numDisps, +1, GRANULARITY);
-#endif
 	}
 
 	std::vector<SimVector> simVecsStdL;
@@ -621,9 +617,7 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 		bs::Timer::Tic("Precompute Similarity Weights");
 		MCImg<float> PrecomputeSimilarityWeights(cv::Mat &img, int patchRadius, int simGamma);
 		gSimWeightsL = PrecomputeSimilarityWeights(imL, PATCHRADIUS, SIMILARITY_GAMMA);
-#ifdef PROCESS_RIGHT_VIEW
 		gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITY_GAMMA);
-#endif
 		bs::Timer::Toc();
 	}
 	else if (gCostAggregationType == TOP50) {
@@ -631,11 +625,9 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 		SelfSimilarityPropagation(imL, simVecsStdL);
 		InitSimVecWeights(imL, simVecsStdL);
 		gSimVecsL = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdL[0]);
-#ifdef PROCESS_RIGHT_VIEW
 		SelfSimilarityPropagation(imR, simVecsStdR);
 		InitSimVecWeights(imR, simVecsStdR);
-		gSimVecsR = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdR[0]);
-#endif		
+		gSimVecsR = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdR[0]);	
 		bs::Timer::Toc();
 	}
 
@@ -643,13 +635,10 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 		slantedPlanesL[id] = SlantedPlane::ConstructFromRandomInit(baryCentersL[id].y, baryCentersL[id].x, maxDisp);
 		bestCostsL[id] = PatchMatchSlantedPlaneCost(baryCentersL[id].y + 0.5, baryCentersL[id].x + 0.5, slantedPlanesL[id], -1);
 	}
-#ifdef PROCESS_RIGHT_VIEW
 	for (int id = 0; id < numTrianglesR; id++) {
 		slantedPlanesR[id] = SlantedPlane::ConstructFromRandomInit(baryCentersR[id].y, baryCentersR[id].x, maxDisp);
 		bestCostsR[id] = PatchMatchSlantedPlaneCost(baryCentersR[id].y + 0.5, baryCentersR[id].x + 0.5, slantedPlanesR[id], -1);
 	}
-#endif
-
 
 	std::vector<int> idListL(numTrianglesL), idListR(numTrianglesR);
 	for (int i = 0; i < numTrianglesL; i++) {
@@ -658,8 +647,10 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 	for (int i = 0; i < numTrianglesR; i++) {
 		idListR[i] = i;
 	}
+	 
 
 	
+
 
 	for (int round = 0; round < 4/*MAX_PATCHMATCH_ITERS*/; round++) {
 
@@ -669,13 +660,11 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 			int id = idListL[i];
 			PropagateAndRandomSearch(id, -1, maxDisp, baryCentersL[id], slantedPlanesL, bestCostsL, nbIndicesL);
 		}
-#ifdef PROCESS_RIGHT_VIEW
 		for (int i = 0; i < numTrianglesL; i++) {
 			int id = idListR[i];
 			PropagateAndRandomSearch(id, +1, maxDisp, baryCentersR[id], slantedPlanesR, bestCostsR, nbIndicesR);
 		}
-#endif
-		
+
 		//cv::Mat dispL = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanesL, triPixelListsL);
 		//std::vector<std::pair<std::string, void*>> aux Params;
 		//auxParams.push_back(std::pair<std::string, void*>("triImg", &triImgL));
@@ -686,35 +675,35 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 		std::reverse(idListR.begin(), idListR.end());
 	}
 
-#ifdef PROCESS_RIGHT_VIEW
-	
+
 	cv::Mat dispL = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanesL, triPixelListsL);
 	cv::Mat dispR = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanesR, triPixelListsR);
 	std::vector<std::pair<std::string, void*>> auxParams;
 	auxParams.push_back(std::pair<std::string, void*>("triImg", &triImgL));
-	EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
-	
+	//EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
+
 	/*PatchMatchOnPixelPostProcess(slantedPlanesL, slantedPlanesR, triPixelListsL, triPixelListsR,
-		imL, imR, dispL, dispR);*/
+	imL, imR, dispL, dispR);*/
 	PatchMatchOnTrianglePostProcess(numRows, numCols, slantedPlanesL, slantedPlanesR,
 		baryCentersL, baryCentersR, nbIndicesL, nbIndicesR, triPixelListsL, triPixelListsR, dispL, dispR);
 
+	return;
 	EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
-#endif
 
 	std::vector<std::vector<SlantedPlane>> candidateLabels;
 	std::vector<std::vector<float>> unaryCosts;
-	GenerateMeshStereoCandidateLabels(numRows, numCols, numDisps, 
+	GenerateMeshStereoCandidateLabels(numRows, numCols, numDisps,
 		baryCentersL, slantedPlanesL, vertexCoordsL, triVertexIndsL, nbIndicesL, candidateLabels, unaryCosts);
 	MeshStereoBPOnFG bp;
 	bp.InitFromTriangulation(numRows, numCols, numDisps, candidateLabels, unaryCosts, vertexCoordsL, triVertexIndsL, triPixelListsL, imL);
 	std::vector<int> outLabels;
 	bp.Run(rootFolder);
-	
+
 }
 
 void TestPatchMatchOnTriangles()
 {
+	
 	std::string rootFolder = ROOTFOLDER;
 
 	cv::Mat imL = cv::imread("D:/data/stereo/" + rootFolder + "/im2.png");

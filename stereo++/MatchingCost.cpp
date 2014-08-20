@@ -22,12 +22,12 @@ extern enum MatchingCostType		{ ADGRADIENT, ADCENSUS };
 extern CostAggregationType			gCostAggregationType;
 extern MatchingCostType				gMatchingCostType;
 
-MCImg<float>			gDsiL;
-MCImg<float>			gDsiR;
-MCImg<float>			gSimWeightsL;
-MCImg<float>			gSimWeightsR;
-MCImg<SimVector>		gSimVecsL;
-MCImg<SimVector>		gSimVecsR;
+extern MCImg<float>			gDsiL;
+extern MCImg<float>			gDsiR;
+extern MCImg<float>			gSimWeightsL;
+extern MCImg<float>			gSimWeightsR;
+extern MCImg<SimVector>		gSimVecsL;
+extern MCImg<SimVector>		gSimVecsR;
 
 
 
@@ -90,6 +90,7 @@ cv::Mat ComputeGradientImage(cv::Mat &img)
 	cv::Mat grayImg;
 	cv::Mat gradientImg(numRows, numCols, CV_32FC4);
 	cv::Mat grayfImg(numRows + 2, numCols + 2, CV_32FC1);
+	grayfImg.setTo(0.f);
 
 	cv::cvtColor(img, grayImg, CV_BGR2GRAY);
 	grayImg.convertTo(grayImg, CV_32FC1, 1 / 255.f);
@@ -215,7 +216,6 @@ MCImg<float> ComputeAdGradientCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisp
 	extern float COLORGRADALPHA;
 	extern float COLORMAXDIFF;
 	extern float GRADMAXDIFF;
-
 
 	int numRows = imL.rows, numCols = imL.cols;
 	int numLevels = numDisps / granularity;

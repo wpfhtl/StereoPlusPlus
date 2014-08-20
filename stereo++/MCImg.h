@@ -24,7 +24,7 @@ public:
 	MCImg(int h_, int w_, int n_ = 1, T* data_ = NULL)
 	{
 		w = w_; h = h_; n = n_;
-		if (!data_) { data = new T[w*h*n]; is_shared = false; }
+		if (!data_) { data = new T[w*h*n]; is_shared = false; memset(data, 0, w*h*n*sizeof(T)); }
 		else	    { data = data_;        is_shared = true; }
 	}
 	void create(int _h, int _w, int _n = 1)
@@ -33,6 +33,7 @@ public:
 		if (!is_shared && data) { delete[] data; }
 		is_shared = false;
 		data = new T[w*h*n];
+		memset(data, 0, w*h*n*sizeof(T));
 	}
 	MCImg& operator=(const MCImg& m)
 	{

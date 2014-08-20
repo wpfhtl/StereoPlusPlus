@@ -5,16 +5,13 @@
 #include <vector>
 #include <algorithm>
 
+
 struct SlantedPlane {
 	float a, b, c;
 	float nx, ny, nz;
 	SlantedPlane() {}
 	SlantedPlane(float a_, float b_, float c_, float nx_, float ny_, float nz_)
 		:a(a_), b(b_), c(c_), nx(nx_), ny(ny_), nz(nz_) {}
-	float ToDisparity(int y, int x)
-	{
-		return a * x + b * y + c;
-	}
 	static float ToDisparity(SlantedPlane &p, float y, float x)
 	{
 		return p.a * x + p.b * y + p.c;
@@ -53,9 +50,16 @@ struct SlantedPlane {
 	}
 	static SlantedPlane ConstructFromRandomInit(float y, float x, float maxDisp)
 	{
-		const int RAND_HALF = RAND_MAX / 2;
+		static int cnt = 0;
 
-		float z = maxDisp * ((double)rand() / RAND_MAX);
+		const int RAND_HALF = RAND_MAX / 2;
+		int tmp = rand();
+		cnt++;
+		if (cnt < 5) {
+			printf("%d\n", tmp);
+		}
+		
+		float z = maxDisp * ((double)tmp / RAND_MAX);
 		float nx = ((float)rand() - RAND_HALF) / RAND_HALF;
 		float ny = ((float)rand() - RAND_HALF) / RAND_HALF;
 		float nz = ((float)rand() - RAND_HALF) / RAND_HALF;
@@ -84,6 +88,30 @@ struct SlantedPlane {
 			+ zRadius * (((float)rand() - RAND_HALF) / RAND_HALF);
 
 		return ConstructFromNormalDepthAndCoord(nx, ny, nz, z, y, x);
+	}
+	float ToDisparity(int y, int x)
+	{
+		return a * x + b * y + c;
+	}
+	void SelfConstructFromNormalDepthAndCoord(float nx, float ny, float nz, float z, float y, float x)
+	{
+		*this = ConstructFromNormalDepthAndCoord(nx, ny, nz, z, y, x);
+	}
+	void SlefConstructFromAbc(float a, float b, float c)
+	{
+		*this = ConstructFromAbc(a, b, c);
+	}
+	void SelfConstructFromOtherView(SlantedPlane &q, int sign)
+	{
+		*this = ConstructFromOtherView(q, sign);
+	}
+	void SelfConstructFromRandomInit(float y, float x, float maxDisp)
+	{
+		*this = ConstructFromRandomInit(y, x, maxDisp);
+	}
+	void SelfConstructFromRandomPertube(SlantedPlane &perturbCenter, float y, float x, float nRadius, float zRadius)
+	{
+		*this = ConstructFromRandomPertube(perturbCenter, y, x, nRadius, zRadius);
 	}
 };
 

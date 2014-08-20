@@ -165,5 +165,8 @@
     <ClCompile Include="GroundTruthStatistics.cpp">
       <Filter>LocalMethods</Filter>
     </ClCompile>
+    <ClCompile Include="ARAP.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

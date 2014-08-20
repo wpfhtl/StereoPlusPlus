@@ -26,6 +26,19 @@
 
 
 
+void dummy()
+{
+	int arr[1000];
+	for (int i = 0; i < 1000; i++)
+		arr[i] = i;
+	int sum = 0;
+	//#pragma omp parallel for 
+	for (int i = 0; i < 1000; i++)
+		sum += arr[i];
+
+	printf("sum = %d\n", sum);
+}
+
 
 #if 1
 
@@ -36,8 +49,13 @@ static void PrintProgramEntryHeader(std::string methodName, int id)
 	printf("========================================================\n");
 }
 
-int main()
+std::string runId;
+
+int main(int argc, char** argv)
 {
+	srand(12345);
+
+
 	extern int PROGRAM_ENTRY;
 
 	switch (PROGRAM_ENTRY) {
@@ -81,6 +99,10 @@ int main()
 		PrintProgramEntryHeader("TestGroundTruthPlaneStatistics", 7);
 		void TestGroundTruthPlaneStatistics();
 		TestGroundTruthPlaneStatistics();
+
+	case 8:
+		dummy();
+		break;
 	}
 	
 	return 0;

@@ -635,8 +635,10 @@ int SLICSegmentation(const cv::Mat &img, const int numPreferedRegions, const int
 	int numRows = img.rows;
 	int numCols = img.cols;
 
+
 	cv::Mat argb(numRows, numCols, CV_8UC4);
 	assert(argb.isContinuous());
+	//assert(img.isContinuous());
 
 	int from_to[] = { -1, 0, 0, 3, 1, 2, 2, 1 };
 	cv::mixChannels(&img, 1, &argb, 1, from_to, 4);

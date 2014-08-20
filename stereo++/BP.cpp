@@ -228,7 +228,7 @@ static cv::Mat RunLoopyBPOnGrideGraph(std::string rootFolder, MCImg<float> &unar
 		int numPixels = pixelList.size();
 
 		// update messages
-		#pragma omp parallel for
+		//#pragma omp parallel for
 		for (int i = 0; i < numPixels; i++) {
 			if (i % 1000 == 0) {
 				//printf("i = %d\n", i);
@@ -332,7 +332,7 @@ void RunLoopyBP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	//cv::imshow("dark is useless", uselessCost);
 	//cv::waitKey(0);
 #else
-	#pragma omp parallel for
+	//#pragma omp parallel for
 	for (int y = 0; y < numRows; y++) {
 		for (int x = 0; x < numCols; x++) {
 			for (int d = 0; d < numDisps; d++) {

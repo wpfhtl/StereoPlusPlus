@@ -72,7 +72,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>D:\code\stereo++\stereo++;$(IncludePath)</IncludePath>
+    <IncludePath>D:\code\stereo++\stereo++;D:\code\eigen-eigen-ffa86ffb5570;D:\code\opencv\build\include;$(IncludePath)</IncludePath>
     <LibraryPath>D:\code\opencv\build\x64\vc12\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -81,7 +81,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>D:\code\stereo++\stereo++;D:\code\opencv\build\include;$(IncludePath)</IncludePath>
+    <IncludePath>D:\code\stereo++\stereo++;D:\code\opencv\build\include;D:\code\eigen-eigen-ffa86ffb5570;$(IncludePath)</IncludePath>
     <LibraryPath>D:\code\opencv\build\x64\vc12\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -171,6 +171,7 @@
     <ClInclude Include="Timer.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="ARAP.cpp" />
     <ClCompile Include="BP.cpp" />
     <ClCompile Include="BPOnFactorGraph.cpp" />
     <ClCompile Include="Evaluation.cpp" />

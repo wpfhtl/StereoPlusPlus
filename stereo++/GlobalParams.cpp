@@ -1,12 +1,11 @@
 #include <string>
-
+#include "MCImg.h"
+#include "StereoAPI.h"
 #include "ReleaseAssert.h"
 
 
 
-struct GlobalParamsInitializer 
-	{ GlobalParamsInitializer(); }
-	autoInitObj;
+
 
 enum CostAggregationType	{ GRID, TOP50 };
 enum MatchingCostType		{ ADGRADIENT, ADCENSUS };
@@ -43,7 +42,20 @@ float						POSTALIGN_TAU1;
 float						POSTALIGN_TAU2;
 
 
+MCImg<float>			gDsiL;
+MCImg<float>			gDsiR;
+MCImg<float>			gSimWeightsL;
+MCImg<float>			gSimWeightsR;
+MCImg<SimVector>		gSimVecsL;
+MCImg<SimVector>		gSimVecsR;
 
+
+
+struct GlobalParamsInitializer
+{
+	GlobalParamsInitializer();
+}
+autoInitObj;
 
 
 

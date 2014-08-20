@@ -86,7 +86,7 @@ float BPOnFG::RunNextIteration()
 
 	// currently processing in sequential order, consider random shuffle later.
 	printf("Updating Messages msgNVarToFactor...\n");
-	#pragma omp parallel for
+	//#pragma omp parallel for
 	for (int i = 0; i < varNodes.size(); i++) {
 		for (int k = 0; k < varNodes[i].factorNbs.size(); k++) {
 			int alpha = varNodes[i].factorNbs[k];
@@ -96,7 +96,7 @@ float BPOnFG::RunNextIteration()
 	}
 
 	printf("Updating Messages msgMFactorToVar...\n");
-	#pragma omp parallel for
+	//#pragma omp parallel for
 	for (int alpha = 0; alpha < factorNodes.size(); alpha++) {
 		for (int k = 0; k < factorNodes[alpha].varNbs.size(); k++) {
 			int i = factorNodes[alpha].varNbs[k];
@@ -108,7 +108,7 @@ float BPOnFG::RunNextIteration()
 
 	printf("Updating Beliefs...\n");
 	float maxBeliefDiff = -FLT_MAX;
-	#pragma omp parallel for
+	//#pragma omp parallel for
 	for (int i = 0; i < allBeliefs.size(); i++) {
 		Probs  oldBelief = allBeliefs[i];
 		Probs &newBelief = allBeliefs[i];

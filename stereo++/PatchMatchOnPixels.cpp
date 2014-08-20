@@ -86,7 +86,7 @@ static void PatchMatchRandomInit(MCImg<SlantedPlane> &slantedPlanes, cv::Mat &be
 		}
 	}
 
-	#pragma omp parallel for
+	//#pragma omp parallel for
 	for (int y = 0; y < numRows; y++) {
 		for (int x = 0; x < numCols; x++) {
 			bestCosts.at<float>(y, x) = PatchMatchSlantedPlaneCost(y, x, slantedPlanes[y][x], sign);
@@ -186,7 +186,7 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 	for (int round = 0; round < MAX_PATCHMATCH_ITERS; round++) {
 
 		bs::Timer::Tic("Left View");
-		#pragma omp parallel for
+		//#pragma omp parallel for
 		for (int id = 0; id < numPixels; id++) {
 			PropagateAndRandomSearch(round, -1, maxDisp, pixelList[id],
 				slantedPlanesL, slantedPlanesR, bestCostsL, bestCostsR);
@@ -194,7 +194,7 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 		bs::Timer::Toc();
 
 		bs::Timer::Tic("Right View");
-		#pragma omp parallel for
+		//#pragma omp parallel for
 		for (int id = 0; id < numPixels; id++) {
 			PropagateAndRandomSearch(round, +1, maxDisp, pixelList[id],
 				slantedPlanesR, slantedPlanesL, bestCostsR, bestCostsL);
