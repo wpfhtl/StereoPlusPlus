@@ -211,7 +211,7 @@ MCImg<float> ComputeAdCensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps,
 MCImg<float> ComputeAdGradientCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign, float granularity)
 {
 	//#define COLORGRADALPHA	0.05f
-	//#define COLORMAXDIFF	0.04f
+	//#define COLORMAXDIFF		0.04f
 	//#define GRADMAXDIFF		0.01f
 
 	extern float COLORGRADALPHA;

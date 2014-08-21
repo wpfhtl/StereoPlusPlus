@@ -79,6 +79,9 @@
     <ClInclude Include="gco-v3.0\LinkedBlockList.h">
       <Filter>gco-v3.0</Filter>
     </ClInclude>
+    <ClInclude Include="PostProcess.h">
+      <Filter>LocalMethods</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="MatchingCost.cpp">

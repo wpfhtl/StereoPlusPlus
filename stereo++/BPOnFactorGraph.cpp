@@ -397,7 +397,7 @@ void RegularGridBPOnFG::InitFromGridGraph(MCImg<float> &unaryCosts, cv::Mat &img
 /////////////////////////////////////////////////////  MeshStereoBPOnFG  /////////////////////////////////////////////////////
 void MeshStereoBPOnFG::InitFromTriangulation(int numRows, int numCols, int numDisps,
 	std::vector<std::vector<SlantedPlane>> &candidateLabels, std::vector<std::vector<float>> &unaryCosts,
-	std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
+	std::vector<cv::Point2f> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
 	std::vector<std::vector<cv::Point2i>> &triPixelList, cv::Mat &img)
 {
 	int numTriangles = triVertexInds.size();
@@ -407,7 +407,7 @@ void MeshStereoBPOnFG::InitFromTriangulation(int numRows, int numCols, int numDi
 	MCImg<std::vector<std::pair<int, int>>> triIndSets(numRows + 1, numCols + 1);
 	for (int id = 0; id < numTriangles; id++) {
 		for (int j = 0; j < 3; j++) {
-			cv::Point2d &p = vertexCoords[triVertexInds[id][j]];
+			cv::Point2f &p = vertexCoords[triVertexInds[id][j]];
 			triIndSets[p.y][(int)p.x].push_back(std::make_pair(id, j));
 		}
 	}
@@ -612,7 +612,7 @@ void MeshStereoBPOnFG::InitFromTriangulation(int numRows, int numCols, int numDi
 
 }
 
-static float TangentPlaneDist(SlantedPlane &p, SlantedPlane &q, cv::Point2d &Xp, cv::Point2d &Xq)
+static float TangentPlaneDist(SlantedPlane &p, SlantedPlane &q, cv::Point2f &Xp, cv::Point2f &Xq)
 {
 	/*const float cutoff = 15.0;*/
 	float Dp = p.ToDisparity(Xp.y, Xp.x);
@@ -626,7 +626,7 @@ float MeshStereoBPOnFG::FactorPotential(std::vector<int> &varInds, std::vector<i
 {
 	//return 0;
 	ASSERT(config.size() == 2 || config.size() == 3)
-		const cv::Point2d halfOffset(0.5, 0.5);
+		const cv::Point2f halfOffset(0.5, 0.5);
 	if (config.size() == 2) {
 		int numPrivateVertices = candidateLabels.size();	// for clarity.
 		if (varInds[0] < numPrivateVertices) {
@@ -653,7 +653,7 @@ float MeshStereoBPOnFG::FactorPotential(std::vector<int> &varInds, std::vector<i
 			}
 			ASSERT(varInds[0] < candidateLabels.size())
 				ASSERT(varInds[1] < candidateLabels.size())
-				cv::Point2d &p = varCoords[varInds[0]] - halfOffset;
+				cv::Point2f &p = varCoords[varInds[0]] - halfOffset;
 			float d1 = candidateLabels[varInds[0]][config[0]].ToDisparity(p.y, p.x);
 			float d2 = candidateLabels[varInds[1]][config[1]].ToDisparity(p.y, p.x);
 			return TAU3 * (std::abs(d1 - d2) > 1e-4);
@@ -671,7 +671,7 @@ cv::Mat MeshStereoBPOnFG::DecodeSplitMapFromBeliefs(int numRows, int numCols, st
 	int numPrivateVertices = this->candidateLabels.size();
 	for (int i = numPrivateVertices; i < varCoords.size(); i++) {
 		if (allBeliefs[i][1] < allBeliefs[i][0]) {
-			cv::Point2d p = varCoords[i];
+			cv::Point2f p = varCoords[i];
 			splitMap.at<bool>(p.y, p.x) = true;
 		}
 	}
@@ -689,18 +689,18 @@ cv::Mat MeshStereoBPOnFG::DecodeSplittingImageFromBeliefs(int numRows, int numCo
 	int numPrivateVertices = this->candidateLabels.size();
 	for (int i = numPrivateVertices; i < varCoords.size(); i++) {
 		if (allBeliefs[i][1] < allBeliefs[i][0]) {
-			cv::Point2d p = varCoords[i];
+			cv::Point2f p = varCoords[i];
 			splitMap.at<bool>(p.y, p.x) = true;
-			cv::circle(canvas, p - cv::Point2d(0.5, 0.5), 0, cv::Scalar(0, 0, 255), 2, CV_AA);
+			cv::circle(canvas, p - cv::Point2f(0.5, 0.5), 0, cv::Scalar(0, 0, 255), 2, CV_AA);
 		}
 	}
 
 #if 0
-	const cv::Point2d halfOffset(0.5, 0.5);
+	const cv::Point2f halfOffset(0.5, 0.5);
 	for (int id = 0; id < triVertexInds.size(); id++) {
-		cv::Point2d A = vertexCoords[triVertexInds[id][0]];
-		cv::Point2d B = vertexCoords[triVertexInds[id][1]];
-		cv::Point2d C = vertexCoords[triVertexInds[id][2]];
+		cv::Point2f A = vertexCoords[triVertexInds[id][0]];
+		cv::Point2f B = vertexCoords[triVertexInds[id][1]];
+		cv::Point2f C = vertexCoords[triVertexInds[id][2]];
 		if (splitMap.at<bool>(A.y, A.x) && splitMap.at<bool>(B.y, B.x)) {
 			cv::line(canvas, A - halfOffset, B - halfOffset, cv::Scalar(0, 0, 255), 1);
 		}

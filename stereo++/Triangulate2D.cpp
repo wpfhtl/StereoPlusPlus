@@ -15,7 +15,7 @@ static void traceBoundary(
 	cv::Mat& segMap,
 	int numSeg,
 	cv::Mat& E,						  // OUT: indices of all countour nodes, set to -1 for non-countour node.
-	std::vector<cv::Point2d>& X,      // OUT: the set of all contour nodes
+	std::vector<cv::Point2f>& X,      // OUT: the set of all contour nodes
 	std::vector<std::vector<int>>& I  // OUT: all sequences of contour node indices
 	)
 {
@@ -67,7 +67,7 @@ static void traceBoundary(
 			if (rowPxF[x] == 1)
 			{
 				rowPxE[x] = c;
-				cv::Point2d pt(x, y);
+				cv::Point2f pt(x, y);
 				X.push_back(pt); c++;
 			}
 		}
@@ -89,7 +89,7 @@ static void traceBoundary(
 			{
 				//backup F
 				//cv::Mat tempF = F.clone();
-				std::stack<cv::Point2d> pos;
+				std::stack<cv::Point2f> pos;
 				//trace boundary_k
 				int temp_y = y;
 				int temp_x = x;
@@ -165,12 +165,12 @@ static void traceBoundary(
 	}
 }
 
-static double PointListStraightenCost(std::vector<cv::Point2d>& pointList, int s, int e)
+static double PointListStraightenCost(std::vector<cv::Point2f>& pointList, int s, int e)
 {
 	int numNodes = pointList.size();
-	cv::Point2d a = pointList[s];
-	cv::Point2d b = pointList[e];
-	cv::Point2d n = b - a;
+	cv::Point2f a = pointList[s];
+	cv::Point2f b = pointList[e];
+	cv::Point2f n = b - a;
 	double nL = cv::norm(n);
 	if (nL > 1e-6) {
 		n *= (1.0 / nL);
@@ -178,13 +178,13 @@ static double PointListStraightenCost(std::vector<cv::Point2d>& pointList, int s
 
 	double dist = 0.f;
 	for (int i = (s + 1) % numNodes; i != e; i = (i + 1) % numNodes) {
-		cv::Point2d& p = pointList[i];
+		cv::Point2f& p = pointList[i];
 		dist += cv::norm((a - p) - (n.dot(a - p)) * n);
 	}
 	return dist;
 }
 
-static std::vector<int> AddBorderAnchor(std::vector<cv::Point2d>& pointList)
+static std::vector<int> AddBorderAnchor(std::vector<cv::Point2f>& pointList)
 {
 	const double maxTol = 2.5;
 	std::vector<int> anchorList;
@@ -218,14 +218,14 @@ static std::vector<int> AddBorderAnchor(std::vector<cv::Point2d>& pointList)
 	return anchorList;
 }
 
-static bool IsTwoLineSegmentIntersect(cv::Point2d& A, cv::Point2d& B, cv::Point2d& C, cv::Point2d& D)
+static bool IsTwoLineSegmentIntersect(cv::Point2f& A, cv::Point2f& B, cv::Point2f& C, cv::Point2f& D)
 {
 	// i adopt the cross product approach
 	// see http://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
 
 	const double eps = 1e-7;
-	cv::Point2d p = A, r = B - A;
-	cv::Point2d q = C, s = D - C;
+	cv::Point2f p = A, r = B - A;
+	cv::Point2f q = C, s = D - C;
 	double rxs = r.cross(s);
 	double qmpxr = (q - p).cross(r);
 	double u = (q - p).cross(r) / rxs;
@@ -256,7 +256,7 @@ static bool IsTwoLineSegmentIntersect(cv::Point2d& A, cv::Point2d& B, cv::Point2
 	return false;
 }
 
-static bool IsPolygonValid(std::vector<cv::Point2d>& pointList)
+static bool IsPolygonValid(std::vector<cv::Point2f>& pointList)
 {
 	if (pointList.size() <= 2) {
 		return false;
@@ -265,9 +265,9 @@ static bool IsPolygonValid(std::vector<cv::Point2d>& pointList)
 		// bad if the three points are colinear
 		// by checking whether the area of the triangle is zero
 		// S = [Ax * (By - Cy) + Bx * (Cy - Ay) + Cx * (Ay - By)] / 2
-		cv::Point2d& A = pointList[0];
-		cv::Point2d& B = pointList[1];
-		cv::Point2d& C = pointList[2];
+		cv::Point2f& A = pointList[0];
+		cv::Point2f& B = pointList[1];
+		cv::Point2f& C = pointList[2];
 		return std::abs(A.x * (B.y - C.y) + B.x * (C.y - A.y) + C.x * (A.y - B.y)) > 1e-6;
 	}
 	// test if any pair of non-adjacent line segment intersect
@@ -286,7 +286,7 @@ static bool IsPolygonValid(std::vector<cv::Point2d>& pointList)
 	return true;
 }
 
-static cv::Mat TriangulateSLICSegments(cv::Mat& labelMap, int numSeg, int mergeRadius, std::vector<cv::Point2d>& vertexCoords, std::vector<std::vector<int>>& triVertexInds)
+static cv::Mat TriangulateSLICSegments(cv::Mat& labelMap, int numSeg, int mergeRadius, std::vector<cv::Point2f>& vertexCoords, std::vector<std::vector<int>>& triVertexInds)
 {
 	/*
 	* labelMap:		input vraiable, a label map representing the segmentation
@@ -302,7 +302,7 @@ static cv::Mat TriangulateSLICSegments(cv::Mat& labelMap, int numSeg, int mergeR
 	int numRows = labelMap.rows;
 	int numCols = labelMap.cols;
 	cv::Mat XIndMap;
-	std::vector<cv::Point2d> X;
+	std::vector<cv::Point2f> X;
 	std::vector<std::vector<int>> I;
 	int tic = clock();
 	traceBoundary(labelMap, numSeg, XIndMap, X, I);
@@ -371,7 +371,7 @@ static cv::Mat TriangulateSLICSegments(cv::Mat& labelMap, int numSeg, int mergeR
 
 		int numNodes = I[id].size();
 		const std::vector<int>& cind = I[id];
-		std::vector<cv::Point2d> pointList(cind.size());
+		std::vector<cv::Point2f> pointList(cind.size());
 		for (int i = 0; i < cind.size(); i++) {
 			pointList[i] = X[cind[i]];
 		}
@@ -405,7 +405,7 @@ static cv::Mat TriangulateSLICSegments(cv::Mat& labelMap, int numSeg, int mergeR
 			}
 
 			// border has not been processed, now process.	
-			std::vector<cv::Point2d> borderList;
+			std::vector<cv::Point2f> borderList;
 			for (int i = s; i != e; i = (i + 1) % numNodes) {
 				borderList.push_back(pointList[i]);
 			}
@@ -503,7 +503,7 @@ static cv::Mat TriangulateSLICSegments(cv::Mat& labelMap, int numSeg, int mergeR
 		}
 		cind = tmp;
 		// retain only simple polygons
-		std::vector<cv::Point2d> pointList;
+		std::vector<cv::Point2f> pointList;
 		for (int i = 0; i < cind.size(); i++) {
 			pointList.push_back(X[cind[i]]);
 		}
@@ -549,7 +549,7 @@ static cv::Mat TriangulateSLICSegments(cv::Mat& labelMap, int numSeg, int mergeR
 				int y = v->y;
 				int x = v->x;
 				if (idMap.at<int>(y, x) < 0) {
-					vertexCoords.push_back(cv::Point2d(x, y));
+					vertexCoords.push_back(cv::Point2f(x, y));
 					tinds.push_back(++curId);
 					idMap.at<int>(y, x) = curId;
 				}
@@ -576,7 +576,7 @@ static cv::Mat TriangulateSLICSegments(cv::Mat& labelMap, int numSeg, int mergeR
 	cv::Mat polyImg(numRows, numCols, CV_8UC3);
 	cv::Mat triImg(numRows, numCols, CV_8UC3);
 	cv::Mat segImg(numRows, numCols, CV_8UC3);
-	const cv::Point2d halfOffset(0.5, 0.5);
+	const cv::Point2f halfOffset(0.5, 0.5);
 
 	// fill polyimg
 	for (int i = 0; i < allPolygons.size(); i++) {
@@ -584,8 +584,8 @@ static cv::Mat TriangulateSLICSegments(cv::Mat& labelMap, int numSeg, int mergeR
 		for (int j = 0; j < polygon.size(); j++) {
 			int s = j;
 			int t = (j + 1) % polygon.size();
-			cv::Point2d ss(polygon[s]->x, polygon[s]->y);
-			cv::Point2d tt(polygon[t]->x, polygon[t]->y);
+			cv::Point2f ss(polygon[s]->x, polygon[s]->y);
+			cv::Point2f tt(polygon[t]->x, polygon[t]->y);
 			cv::line(polyImg, ss - halfOffset, tt - halfOffset,
 				cv::Scalar(rand() % 255, rand() % 255, rand() % 255, 255), 1, CV_AA);
 		}
@@ -593,9 +593,9 @@ static cv::Mat TriangulateSLICSegments(cv::Mat& labelMap, int numSeg, int mergeR
 
 	// fill triImg
 	for (int i = 0; i < triVertexInds.size(); i++) {
-		cv::Point2d p0 = vertexCoords[triVertexInds[i][0]];
-		cv::Point2d p1 = vertexCoords[triVertexInds[i][1]];
-		cv::Point2d p2 = vertexCoords[triVertexInds[i][2]];
+		cv::Point2f p0 = vertexCoords[triVertexInds[i][0]];
+		cv::Point2f p1 = vertexCoords[triVertexInds[i][1]];
+		cv::Point2f p2 = vertexCoords[triVertexInds[i][2]];
 
 		cv::line(triImg, p0 - halfOffset, p1 - halfOffset, cv::Scalar(0, 0, 255, 255), 1, CV_AA);
 		cv::line(triImg, p0 - halfOffset, p2 - halfOffset, cv::Scalar(0, 0, 255, 255), 1, CV_AA);
@@ -668,16 +668,16 @@ int SLICSegmentation(const cv::Mat &img, const int numPreferedRegions, const int
 	return numlabels;
 }
 
-cv::Mat DrawTriangleImage(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds)
+cv::Mat DrawTriangleImage(int numRows, int numCols, std::vector<cv::Point2f> &vertexCoords, std::vector<std::vector<int>> &triVertexInds)
 {
-	const cv::Point2d halfOffset(0.5, 0.5);
+	const cv::Point2f halfOffset(0.5, 0.5);
 	cv::Mat triImg(numRows, numCols, CV_8UC3);
 	triImg.setTo(cv::Vec3b(0, 0, 0));
 
 	for (int i = 0; i < triVertexInds.size(); i++) {
-		cv::Point2d p0 = vertexCoords[triVertexInds[i][0]];
-		cv::Point2d p1 = vertexCoords[triVertexInds[i][1]];
-		cv::Point2d p2 = vertexCoords[triVertexInds[i][2]];
+		cv::Point2f p0 = vertexCoords[triVertexInds[i][0]];
+		cv::Point2f p1 = vertexCoords[triVertexInds[i][1]];
+		cv::Point2f p2 = vertexCoords[triVertexInds[i][2]];
 
 		cv::line(triImg, p0 - halfOffset, p1 - halfOffset, cv::Scalar(0, 0, 255, 255), 1, CV_AA);
 		cv::line(triImg, p0 - halfOffset, p2 - halfOffset, cv::Scalar(0, 0, 255, 255), 1, CV_AA);
@@ -687,7 +687,7 @@ cv::Mat DrawTriangleImage(int numRows, int numCols, std::vector<cv::Point2d> &ve
 	return triImg;
 }
 
-void Triangulate2DImage(cv::Mat& img, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds)
+void Triangulate2DImage(cv::Mat& img, std::vector<cv::Point2f> &vertexCoords, std::vector<std::vector<int>> &triVertexInds)
 {
 	int numRows = img.rows, numCols = img.cols;
 	const int segLen = 8;
@@ -717,7 +717,7 @@ void TestTriangulation2D()
 	const int mergeRadius = segLen * 0.375;
 
 	cv::Mat labelMap, contourImg;
-	std::vector<cv::Point2d> vertexCoords;
+	std::vector<cv::Point2f> vertexCoords;
 	std::vector<std::vector<int>> triVertexInds;
 
 	int numSeg = SLICSegmentation(imL, numPreferedRegions, compactness, labelMap, contourImg);

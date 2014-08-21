@@ -90,9 +90,9 @@ class MeshStereoBPOnFG : public BPOnFG
 {
 public:
 	std::vector<std::vector<SlantedPlane>>	candidateLabels;
-	std::vector<cv::Point2d>				varCoords;
+	std::vector<cv::Point2f>				varCoords;
 	std::vector<cv::Vec3b>					triMeanColors;
-	std::vector<cv::Point2d>				vertexCoords;
+	std::vector<cv::Point2f>				vertexCoords;
 	std::vector<std::vector<int>>			triVertexInds;
 	std::vector<std::vector<cv::Point2i>>   triPixelList;
 	std::vector<std::vector<SlantedPlane>>	triVertexBestLabels;
@@ -100,7 +100,7 @@ public:
 public:
 	void InitFromTriangulation(int numRows, int numCols, int numDisps,
 		std::vector<std::vector<SlantedPlane>> &candidateLabels, std::vector<std::vector<float>> &unaryCosts,
-		std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
+		std::vector<cv::Point2f> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
 		std::vector<std::vector<cv::Point2i>> &triPixelList, cv::Mat &img);
 
 	float FactorPotential(std::vector<int> &varInds, std::vector<int> &config);

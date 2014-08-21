@@ -7,6 +7,7 @@
 
 
 struct SlantedPlane {
+	// The class has been updated to make sure that nz is always positive.
 	float a, b, c;
 	float nx, ny, nz;
 	SlantedPlane() {}
@@ -21,10 +22,17 @@ struct SlantedPlane {
 		SlantedPlane p;
 		const float eps = 1e-4;
 		p.nx = nx;  p.ny = ny;  p.nz = nz;
-		if (std::abs(p.nz) < eps) {
+		// make sure nz is always positive.
+		if (p.nz < 0) {
+			p.nx = -p.nx;
+			p.ny = -p.ny;
+			p.nz = -p.nz;
+		}
+		p.nz = std::max(eps, p.nz);
+		/*if (std::abs(p.nz) < eps) {
 			if (p.nz > 0)	p.nz = +eps;
 			else			p.nz = -eps;
-		}
+		}*/
 		p.a = -p.nx / p.nz;
 		p.b = -p.ny / p.nz;
 		p.c = (p.nx * x + p.ny * y + p.nz * z) / p.nz;
@@ -62,6 +70,7 @@ struct SlantedPlane {
 		ny /= norm;
 		nz /= norm;
 
+		// nz will always be positive after invoking ConstructFromNormalDepthAndCoord
 		return ConstructFromNormalDepthAndCoord(nx, ny, nz, z, y, x);
 	}
 	static SlantedPlane ConstructFromRandomPertube(SlantedPlane &perturbCenter, float y, float x, float nRadius, float zRadius)
@@ -80,6 +89,7 @@ struct SlantedPlane {
 		float z = perturbCenter.ToDisparity(y, x)
 			+ zRadius * (((float)rand() - RAND_HALF) / RAND_HALF);
 
+		// nz will always be positive after invoking ConstructFromNormalDepthAndCoord
 		return ConstructFromNormalDepthAndCoord(nx, ny, nz, z, y, x);
 	}
 	float ToDisparity(int y, int x)

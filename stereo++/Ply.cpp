@@ -133,7 +133,7 @@ static cv::Point3d Convert2DCoordDispTo3DCoordDepth(float y, float x, float d,
 #if 1
 void SaveMeshStereoResultToPly(cv::Mat &img, float maxDisp, 
 	std::string workingDir, std::string plyFilePath, std::string textureFilePath,
-	std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds, 
+	std::vector<cv::Point2f> &vertexCoords, std::vector<std::vector<int>> &triVertexInds, 
 	std::vector<std::vector<SlantedPlane>> &triVertexBestLabels, cv::Mat &splitMap)
 {
 	//splitMap.setTo(true);
@@ -259,7 +259,7 @@ void SaveMeshStereoResultToPly(cv::Mat &img, float maxDisp,
 #else 
 void SaveMeshStereoResultToPly(cv::Mat &img, float maxDisp,
 	std::string workingDir, std::string plyFilePath, std::string textureFilePath,
-	std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
+	std::vector<cv::Point2f> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
 	std::vector<std::vector<SlantedPlane>> &triVertexBestLabels, cv::Mat &splitMap)
 {
 	splitMap.setTo(1);

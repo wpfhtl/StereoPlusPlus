@@ -164,6 +164,7 @@
     <ClInclude Include="poly2tri\sweep\cdt.h" />
     <ClInclude Include="poly2tri\sweep\sweep.h" />
     <ClInclude Include="poly2tri\sweep\sweep_context.h" />
+    <ClInclude Include="PostProcess.h" />
     <ClInclude Include="ReleaseAssert.h" />
     <ClInclude Include="SlantedPlane.h" />
     <ClInclude Include="SLIC\SLIC.h" />

@@ -10,6 +10,7 @@
 #include "Timer.h"
 #include "BPOnFactorGraph.h"
 #include "ReleaseAssert.h"
+#include "PostProcess.h"
 
 #define PROCESS_RIGHT_VIEW
 
@@ -44,14 +45,14 @@ extern MCImg<SimVector>		gSimVecsR;
 //	fclose(fid);
 //}
 
-struct SortByRowCoord {
-	bool operator ()(const std::pair<cv::Point2d, int> &a, const std::pair<cv::Point2d, int> &b) const {
+static struct SortByRowCoord {
+	bool operator ()(const std::pair<cv::Point2f, int> &a, const std::pair<cv::Point2f, int> &b) const {
 		return a.first.y < b.first.y;
 	}
 };
 
-struct SortByColCoord {
-	bool operator ()(const std::pair<cv::Point2d, int> &a, const std::pair<cv::Point2d, int> &b) const {
+static struct SortByColCoord {
+	bool operator ()(const std::pair<cv::Point2f, int> &a, const std::pair<cv::Point2f, int> &b) const {
 		return a.first.x < b.first.x;
 	}
 };
@@ -61,12 +62,12 @@ static bool InBound(int y, int x, int numRows, int numCols)
 	return 0 <= y && y < numRows && 0 <= x && x < numCols;
 }
 
-float sign(cv::Point2d p1, cv::Point2d p2, cv::Point2d p3)
+float sign(cv::Point2f p1, cv::Point2f p2, cv::Point2f p3)
 {
 	return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
 }
 
-bool PointInTriangle(cv::Point2d pt, cv::Point2d v1, cv::Point2d v2, cv::Point2d v3)
+bool PointInTriangle(cv::Point2f pt, cv::Point2f v1, cv::Point2f v2, cv::Point2f v3)
 {
 	bool b1, b2, b3;
 
@@ -86,7 +87,7 @@ static void ImproveGuess(int y, int x, SlantedPlane &oldGuess, SlantedPlane &new
 	}
 }
 
-static void PropagateAndRandomSearch(int id, int sign, float maxDisp, cv::Point2d &srcPos,
+static void PropagateAndRandomSearch(int id, int sign, float maxDisp, cv::Point2f &srcPos,
 	std::vector<SlantedPlane> &slantedPlanes, std::vector<float> &bestCosts, std::vector<std::vector<int>> &nbIndices)
 {
 	int y = srcPos.y + 0.5;
@@ -111,8 +112,8 @@ static void PropagateAndRandomSearch(int id, int sign, float maxDisp, cv::Point2
 
 }
 
-void ConstructNeighboringTriangleGraph(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords, 
-	std::vector<std::vector<int>> &triVertexInds, std::vector<cv::Point2d> &baryCenters, 
+void ConstructNeighboringTriangleGraph(int numRows, int numCols, std::vector<cv::Point2f> &vertexCoords, 
+	std::vector<std::vector<int>> &triVertexInds, std::vector<cv::Point2f> &baryCenters, 
 	std::vector<std::vector<int>> &nbIndices)
 {
 	const int numTriangles = triVertexInds.size();
@@ -125,15 +126,15 @@ void ConstructNeighboringTriangleGraph(int numRows, int numCols, std::vector<cv:
 	// Step 1 - Determine an ordering of the triangles
 	baryCenters.resize(numTriangles);
 	for (int i = 0; i < baryCenters.size(); i++) {
-		cv::Point2d a = vertexCoords[triVertexInds[i][0]];
-		cv::Point2d b = vertexCoords[triVertexInds[i][1]];
-		cv::Point2d c = vertexCoords[triVertexInds[i][2]];
+		cv::Point2f a = vertexCoords[triVertexInds[i][0]];
+		cv::Point2f b = vertexCoords[triVertexInds[i][1]];
+		cv::Point2f c = vertexCoords[triVertexInds[i][2]];
 		baryCenters[i] = cv::Point((a.x + b.x + c.x) / 3.0 - 0.5, (a.y + b.y + c.y) / 3.0 - 0.5);
 	}
 
-	std::vector<std::pair<cv::Point2d, int>> centroidIdPairs(baryCenters.size());
+	std::vector<std::pair<cv::Point2f, int>> centroidIdPairs(baryCenters.size());
 	for (int i = 0; i < baryCenters.size(); i++) {
-		centroidIdPairs[i] = std::pair<cv::Point2d, int>(baryCenters[i], i);
+		centroidIdPairs[i] = std::pair<cv::Point2f, int>(baryCenters[i], i);
 	}
 
 
@@ -164,11 +165,11 @@ void ConstructNeighboringTriangleGraph(int numRows, int numCols, std::vector<cv:
 	// Visualize and verify the ordering
 	cv::Mat canvas(numRows, numCols, CV_8UC3);
 #if 0
-	cv::Point2d oldEndPt(-0.5, -0.5);
+	cv::Point2f oldEndPt(-0.5, -0.5);
 	int stepSz = numTriangles / 20;
 	for (int i = 0; i < numTriangles; i += stepSz) {
 		for (int j = i; j < i + stepSz && j < numTriangles; j++) {
-			cv::Point2d newEndPt = centroidIdPairs[j].first;
+			cv::Point2f newEndPt = centroidIdPairs[j].first;
 			cv::line(canvas, oldEndPt, newEndPt, cv::Scalar(0, 0, 255, 255), 1, CV_AA);
 			oldEndPt = newEndPt;
 		}
@@ -182,7 +183,7 @@ void ConstructNeighboringTriangleGraph(int numRows, int numCols, std::vector<cv:
 	std::vector<std::set<int>> triIndSets((numRows + 1) * (numCols + 1));
 	for (int i = 0; i < numTriangles; i++) {
 		for (int j = 0; j < 3; j++) {
-			cv::Point2d &p = vertexCoords[triVertexInds[i][j]];
+			cv::Point2f &p = vertexCoords[triVertexInds[i][j]];
 			triIndSets[p.y * (numCols + 1) + p.x].insert(i);
 		}
 	}
@@ -192,7 +193,7 @@ void ConstructNeighboringTriangleGraph(int numRows, int numCols, std::vector<cv:
 		// Merge the neighbors of the three vertices into one
 		std::set<int> idxSet;
 		for (int j = 0; j < 3; j++) {
-			cv::Point2d &p = vertexCoords[triVertexInds[i][j]];
+			cv::Point2f &p = vertexCoords[triVertexInds[i][j]];
 			std::set<int> &tmp = triIndSets[p.y * (numCols + 1) + p.x];
 			idxSet.insert(tmp.begin(), tmp.end());
 		}
@@ -226,9 +227,9 @@ void ConstructNeighboringTriangleGraph(int numRows, int numCols, std::vector<cv:
 	for (int retry = 0; retry < 100; retry++) {
 		canvas.setTo(cv::Scalar(0, 0, 0));
 		int id = rand() % numTriangles;
-		cv::Point2d A = baryCenters[id];
+		cv::Point2f A = baryCenters[id];
 		for (int j = 0; j < nbIndices[id].size(); j++) {
-			cv::Point2d B = baryCenters[nbIndices[id][j]];
+			cv::Point2f B = baryCenters[nbIndices[id][j]];
 			cv::line(canvas, A, B, cv::Scalar(0, 0, 255), 1, CV_AA);
 		}
 		printf("number of neighbors: %d\n", nbIndices[id].size());
@@ -238,26 +239,26 @@ void ConstructNeighboringTriangleGraph(int numRows, int numCols, std::vector<cv:
 #endif
 }
 
-void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords,
+void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Point2f> &vertexCoords,
 	std::vector<std::vector<int>> &triVertexInds, std::vector<std::vector<cv::Point2i>> &triPixelLists)
 {
-	const cv::Point2d halfOffset(0.5, 0.5);
+	const cv::Point2f halfOffset(0.5, 0.5);
 	int numTriangles = triVertexInds.size();
 	triPixelLists.resize(numTriangles);
 
 	for (int i = 0; i < numTriangles; i++) {
-		cv::Point2d &a = vertexCoords[triVertexInds[i][0]];
-		cv::Point2d &b = vertexCoords[triVertexInds[i][1]];
-		cv::Point2d &c = vertexCoords[triVertexInds[i][2]];
+		cv::Point2f &a = vertexCoords[triVertexInds[i][0]];
+		cv::Point2f &b = vertexCoords[triVertexInds[i][1]];
+		cv::Point2f &c = vertexCoords[triVertexInds[i][2]];
 
-		int xL = std::min(a.x, b.x); xL = std::min((double)xL, c.x);
-		int xR = std::max(a.x, b.x); xR = std::max((double)xR, c.x);
-		int yU = std::min(a.y, b.y); yU = std::min((double)yU, c.y);
-		int yD = std::max(a.y, b.y); yD = std::max((double)yD, c.y);
+		int xL = std::min(a.x, b.x); xL = std::min((float)xL, c.x);
+		int xR = std::max(a.x, b.x); xR = std::max((float)xR, c.x);
+		int yU = std::min(a.y, b.y); yU = std::min((float)yU, c.y);
+		int yD = std::max(a.y, b.y); yD = std::max((float)yD, c.y);
 
 		for (int y = std::max(0, yU); y < yD && y < numRows; y++) {
 			for (int x = std::max(0, xL); x < xR && x < numCols; x++) {
-				if (PointInTriangle(cv::Point2d(x, y) + halfOffset, a, b, c)) {
+				if (PointInTriangle(cv::Point2f(x, y) + halfOffset, a, b, c)) {
 					triPixelLists[i].push_back(cv::Point2i(x, y));
 				}
 			}
@@ -270,7 +271,7 @@ void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Point2d> 
 	for (int retry = 0; retry < 100; retry++) {
 		canvas.setTo(cv::Scalar(0, 0, 0));
 		int id = rand() % numTriangles;
-		std::vector<cv::Point2d> &pixelList = triPixelLists[id];
+		std::vector<cv::Point2f> &pixelList = triPixelLists[id];
 		for (int j = 0; j < pixelList.size(); j++) {
 			int y = pixelList[j].y;
 			int x = pixelList[j].x;
@@ -297,8 +298,8 @@ cv::Mat TriangleLabelToDisparityMap(int numRows, int numCols, std::vector<Slante
 	return dispMap;
 }
 
-static void GenerateMeshStereoCandidateLabels(int numRows, int numCols, int numDisps, std::vector<cv::Point2d> &baryCenters,
-	std::vector<SlantedPlane> &slantedPlanes, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
+static void GenerateMeshStereoCandidateLabels(int numRows, int numCols, int numDisps, std::vector<cv::Point2f> &baryCenters,
+	std::vector<SlantedPlane> &slantedPlanes, std::vector<cv::Point2f> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
 	std::vector<std::vector<int>> &nbIndices, std::vector<std::vector<SlantedPlane>> &candidateLabels, std::vector<std::vector<float>> &unaryCosts)
 {
 	int numTriangles = baryCenters.size();
@@ -324,7 +325,7 @@ static void GenerateMeshStereoCandidateLabels(int numRows, int numCols, int numD
 	MCImg<std::vector<std::pair<int, int>>> triIndSets(numRows + 1, numCols + 1);
 	for (int id = 0; id < numTriangles; id++) {
 		for (int j = 0; j < 3; j++) {
-			cv::Point2d &p = vertexCoords[triVertexInds[id][j]];
+			cv::Point2f &p = vertexCoords[triVertexInds[id][j]];
 			triIndSets[p.y][(int)p.x].push_back(std::make_pair(id, j));
 		}
 	}
@@ -385,133 +386,11 @@ static void GenerateMeshStereoCandidateLabels(int numRows, int numCols, int numD
 	}
 }
 
-static std::vector<float> DetermineConfidence(cv::Mat &validPixelMap, std::vector<std::vector<cv::Point2i>> &segPixelLists)
-{
-	int numSegs = segPixelLists.size();
-	std::vector<float> confidence(numSegs);
-	for (int id = 0; id < numSegs; id++) {
-		std::vector<cv::Point2i> &pixelList = segPixelLists[id];
-		int numValidPixels = 0;
-		for (int i = 0; i < pixelList.size(); i++) {
-			cv::Point2i &p = pixelList[i];
-			if (validPixelMap.at<bool>(p.y, p.x)) {
-				numValidPixels++;
-			}
-		}
-		confidence[id] = (float)numValidPixels / (float)pixelList.size();
-	}
-	return confidence;
-}
 
-static void SegmentOcclusionFilling(std::vector<SlantedPlane> &slantedPlanes, std::vector<cv::Point2d> &baryCenters,
-	std::vector<std::vector<int>> &nbIndices, std::vector<float> &confidence)
-{
-	const float LOW_CONF_THRESH = 0.5f;
-	const float HIGH_CONF_THRESH = 0.8f;
-	int numSegs = slantedPlanes.size();
-
-	for (int id = 0; id < numSegs; id++) {
-		if (confidence[id] < LOW_CONF_THRESH) {
-
-			float lowestDisp = FLT_MAX;
-			int bestNbId = -1;
-			float yc = baryCenters[id].y;
-			float xc = baryCenters[id].x;
-
-			for (int k = 0; k < nbIndices[id].size(); k++) {
-				int nbId = nbIndices[id][k];
-				if (confidence[nbId] > HIGH_CONF_THRESH) {
-					float d = slantedPlanes[nbId].ToDisparity(yc, xc);
-					if (d < lowestDisp) {
-						lowestDisp = d;
-						bestNbId = nbId;
-					}
-				}
-			}
-			if (bestNbId != -1) {
-				slantedPlanes[id] = slantedPlanes[bestNbId];
-			}
-		}
-	}
-}
-
-static void SegmentOcclusionFilling(int numRows, int numCols, std::vector<SlantedPlane> &slantedPlanes,
-	std::vector<cv::Point2d> &baryCenters, std::vector<std::vector<int>> &nbIndices,
-	std::vector<float> &confidence, std::vector<std::vector<cv::Point2i>> &segPixelLists)
-{
-	const float LOW_CONF_THRESH = 0.4f;
-	const float HIGH_CONF_THRESH = 0.8;
-	int numSegs = slantedPlanes.size();
-
-	cv::Mat ownerMap(numRows, numCols, CV_32SC1);
-	ownerMap.setTo(-1);
-	for (int id = 0; id < numSegs; id++) {
-		std::vector<cv::Point2i> &pixelList = segPixelLists[id];
-		for (int k = 0; k < pixelList.size(); k++) {
-			cv::Point2i &p = pixelList[k];
-			ownerMap.at<int>(p.y, p.x) = id;
-		}
-	}
-
-	for (int id = 0; id < numSegs; id++) {
-		if (confidence[id] < LOW_CONF_THRESH) {
-
-			int yc = baryCenters[id].y + 0.5;
-			int xc = baryCenters[id].x + 0.5;
-			std::set<int> nbIdSet;
-
-			const int RADIUS = 17;
-			for (int y = yc - RADIUS; y <= yc + RADIUS; y++) {
-				for (int x = xc - RADIUS; x <= xc + RADIUS; x++) {
-					if (InBound(y, x, numRows, numCols)) {
-						nbIdSet.insert(ownerMap.at<int>(y, x));
-					}
-				}
-			}
-
-			float lowestDisp = FLT_MAX;
-			int bestNbId = -1;
-
-			for (std::set<int>::iterator it = nbIdSet.begin(); it != nbIdSet.end(); it++) {
-				int nbId = *it;
-				if (nbId != -1 && confidence[nbId] > HIGH_CONF_THRESH) {
-					float d = slantedPlanes[nbId].ToDisparity(baryCenters[id].y, baryCenters[id].x);
-					if (d < lowestDisp) {
-						lowestDisp = d;
-						bestNbId = nbId;
-					}
-				}
-			}
-			if (bestNbId != -1) {
-				slantedPlanes[id] = slantedPlanes[bestNbId];
-			}
-		}
-	}
-}
-
-static cv::Mat DrawSegmentConfidenceMap(int numRows, int numCols, std::vector<float> &confidence,
-	std::vector<std::vector<cv::Point2i>> &segPixelLists)
-{
-	ASSERT(confidence.size() == segPixelLists.size());
-	cv::Mat confidenceMap(numRows, numCols, CV_32FC1);
-	confidenceMap.setTo(0.f);
-	int numSegs = confidence.size();
-	for (int id = 0; id < numSegs; id++) {
-		std::vector<cv::Point2i> &pixelList = segPixelLists[id];
-		for (int k = 0; k < pixelList.size(); k++) {
-			cv::Point2i &p = pixelList[k];
-			ASSERT(InBound(p.y, p.x, numRows, numCols))
-				confidenceMap.at<float>(p.y, p.x) = confidence[id];
-		}
-	}
-	cv::cvtColor(confidenceMap, confidenceMap, CV_GRAY2BGR);
-	confidenceMap.convertTo(confidenceMap, CV_8UC3, 255);
-	return confidenceMap;
-}
 
 void PatchMatchOnTrianglePostProcess(int numRows, int numCols,
 	std::vector<SlantedPlane> &slantedPlanesL, std::vector<SlantedPlane> &slantedPlanesR,
-	std::vector<cv::Point2d> &baryCentersL, std::vector<cv::Point2d> &baryCentersR,
+	std::vector<cv::Point2f> &baryCentersL, std::vector<cv::Point2f> &baryCentersR,
 	std::vector<std::vector<int>>& nbIndicesL, std::vector<std::vector<int>>& nbIndicesR,
 	std::vector<std::vector<cv::Point2i>> &triPixelListsL, std::vector<std::vector<cv::Point2i>> &triPixelListsR,
 	cv::Mat &dispL, cv::Mat &dispR)
@@ -582,13 +461,13 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 	SetupStereoParameters(rootFolder, numDisps, maxDisp, visualizeScale);
 	InitGlobalDsiAndSimWeights(imL, imR, numDisps);
 
-	std::vector<cv::Point2d> vertexCoordsL, vertexCoordsR;
+	std::vector<cv::Point2f> vertexCoordsL, vertexCoordsR;
 	std::vector<std::vector<int>> triVertexIndsL, triVertexIndsR;
 	Triangulate2DImage(imL, vertexCoordsL, triVertexIndsL);
 	Triangulate2DImage(imR, vertexCoordsR, triVertexIndsR);
 	cv::Mat triImgL = DrawTriangleImage(numRows, numCols, vertexCoordsL, triVertexIndsL);
 
-	std::vector<cv::Point2d> baryCentersL, baryCentersR;
+	std::vector<cv::Point2f> baryCentersL, baryCentersR;
 	std::vector<std::vector<int>> nbIndicesL, nbIndicesR;
 	ConstructNeighboringTriangleGraph(numRows, numCols, vertexCoordsL, triVertexIndsL, baryCentersL, nbIndicesL);
 	ConstructNeighboringTriangleGraph(numRows, numCols, vertexCoordsR, triVertexIndsR, baryCentersR, nbIndicesR);

@@ -5,7 +5,35 @@
 
 
 
+class GlobalParams
+{
+	// A singleton class to store global parameters.
+	// We should avoid to use any global variables.
+	// Put all the global variables in this class instead.
+public:
+	static GlobalParams& GetInstance()
+	{
+		static GlobalParams    instance;	// Guaranteed to be destroyed.
+		// Instantiated on first use.
+		return instance;
+	}
+private:
+	GlobalParams() {};						// Constructor? (the {} brackets) are needed here.
+	// Dont forget to declare these two. You want to make sure they
+	// are unaccessable otherwise you may accidently get copies of
+	// your singleton appearing.
+	GlobalParams(GlobalParams const&);		// Don't Implement
+	void operator=(GlobalParams const&);	// Don't implement
 
+public:
+};
+
+MCImg<float>				gDsiL;
+MCImg<float>				gDsiR;
+MCImg<float>				gSimWeightsL;
+MCImg<float>				gSimWeightsR;
+MCImg<SimVector>			gSimVecsL;
+MCImg<SimVector>			gSimVecsR;
 
 enum CostAggregationType	{ GRID, TOP50 };
 enum MatchingCostType		{ ADGRADIENT, ADCENSUS };
@@ -41,13 +69,10 @@ int							PROGRAM_ENTRY;
 float						POSTALIGN_TAU1;
 float						POSTALIGN_TAU2;
 
+float						ARAP_LAMBDA;
+int							SEGMENT_LEN;
 
-MCImg<float>			gDsiL;
-MCImg<float>			gDsiR;
-MCImg<float>			gSimWeightsL;
-MCImg<float>			gSimWeightsR;
-MCImg<SimVector>		gSimVecsL;
-MCImg<SimVector>		gSimVecsR;
+
 
 
 
@@ -165,6 +190,14 @@ GlobalParamsInitializer::GlobalParamsInitializer()
 		else if (std::string(keyStr) == "POSTALIGN_TAU2") {
 			sscanf(valStr, "%f", &POSTALIGN_TAU2);
 			printf("%20s = %f\n", "POSTALIGN_TAU2", POSTALIGN_TAU2);
+		}
+		else if (std::string(keyStr) == "ARAP_LAMBDA") {
+			sscanf(valStr, "%f", &ARAP_LAMBDA);
+			printf("%20s = %f\n", "ARAP_LAMBDA", ARAP_LAMBDA);
+		}
+		else if (std::string(keyStr) == "SEGMENT_LEN") {
+			sscanf(valStr, "%d", &SEGMENT_LEN);
+			printf("%20s = %d\n", "SEGMENT_LEN", SEGMENT_LEN);
 		}
 	}
 	

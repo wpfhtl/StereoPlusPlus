@@ -54,9 +54,9 @@ void InitSimVecWeights(cv::Mat &img, std::vector<SimVector> &simVecs);
 
 void SelfSimilarityPropagation(cv::Mat &img, cv::vector<SimVector> &simVecs);
 
-void Triangulate2DImage(cv::Mat& img, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds);
+void Triangulate2DImage(cv::Mat& img, std::vector<cv::Point2f> &vertexCoords, std::vector<std::vector<int>> &triVertexInds);
 
-cv::Mat DrawTriangleImage(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds);
+cv::Mat DrawTriangleImage(int numRows, int numCols, std::vector<cv::Point2f> &vertexCoords, std::vector<std::vector<int>> &triVertexInds);
 
 float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int sign);
 

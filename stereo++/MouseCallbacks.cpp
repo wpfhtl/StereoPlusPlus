@@ -52,7 +52,7 @@ void OnMouseEvaluateDisparityDefaultDrawing(int event, int x, int y, int flags, 
 		float dMY = dispL.at<float>(y, x);
 		char text[1024];
 		sprintf(text, "(%d, %d)  GT: %.2f  MINE: %.2f", y, x, dGT, dMY);
-		cv::putText(tmp, std::string(text), cv::Point2d(20, 50), 0, 0.6, cv::Scalar(0, 0, 255, 1), 2);
+		cv::putText(tmp, std::string(text), cv::Point2f(20, 50), 0, 0.6, cv::Scalar(0, 0, 255, 1), 2);
 
 		cv::Point UU(x + 2 * numCols, y);
 		cv::Point DD(x + 2 * numCols - dMY, y + numRows);
@@ -63,7 +63,7 @@ void OnMouseEvaluateDisparityDefaultDrawing(int event, int x, int y, int flags, 
 	{
 		char text[1024];
 		sprintf(text, "BadPixelRate  %.2f%%  %.2f%%  %.2f%%", 100.f * badRateOnNonocc, 100.f * badRateOnAll, 100.f * badRateOnDisc);
-		cv::putText(tmp, std::string(text), cv::Point2d(20, 50), 0, 0.6, cv::Scalar(0, 0, 255, 1), 2);
+		cv::putText(tmp, std::string(text), cv::Point2f(20, 50), 0, 0.6, cv::Scalar(0, 0, 255, 1), 2);
 	}
 
 	if (event == CV_EVENT_LBUTTONDBLCLK)
@@ -116,11 +116,11 @@ void OnMousePatchMatchOnPixels(int event, int x, int y, int flags, void *param)
 
 		char textBuf[1024];
 		sprintf(textBuf, "( a,  b,  c) = (% 11.6f, % 11.6f, % 11.6f)", sp.a, sp.b, sp.c);
-		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2d(20, 50),  CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2f(20, 50),  CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
 		sprintf(textBuf, "(nx, ny, nz) = (% 11.6f, % 11.6f, % 11.6f)", sp.nx, sp.ny, sp.nz);
-		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2d(20, 80),  CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2f(20, 80),  CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
 		sprintf(textBuf, "bestCost(%3d, %3d) = %f", y, x, bestCostsL.at<float>(y, x));
-		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2d(20, 110), CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2f(20, 110), CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
 	}
 	
 	cv::imshow("OnMousePatchMatchOnPixels", tmpCanvas);
@@ -218,7 +218,7 @@ void OnMouseMeshStereoOnFactorGraph(int event, int x, int y, int flags, void *pa
 
 	cv::Mat									&splitMap = *(cv::Mat*)auxParams[0].second;
 	MeshStereoBPOnFG						&bp = *(MeshStereoBPOnFG*)auxParams[1].second;
-	std::vector<cv::Point2d>				&vertexCoords = bp.vertexCoords;
+	std::vector<cv::Point2f>				&vertexCoords = bp.vertexCoords;
 	std::vector<std::vector<int>>			&triVertexInds = bp.triVertexInds;
 	std::vector<std::vector<SlantedPlane>>	&triVertexBestLabels = bp.triVertexBestLabels;
 
@@ -228,8 +228,8 @@ void OnMouseMeshStereoOnFactorGraph(int event, int x, int y, int flags, void *pa
 		y %= imL.rows; x %= imL.cols;
 		int bestIdx = 0;
 		for (int i = 0; i < vertexCoords.size(); i++) {
-			cv::Point2d &p = vertexCoords[i];
-			cv::Point2d &q = vertexCoords[bestIdx];
+			cv::Point2f &p = vertexCoords[i];
+			cv::Point2f &q = vertexCoords[bestIdx];
 			if ((y - p.y) * (y - p.y) + (x - p.x) * (x - p.x) 
 				< (y - q.y) * (y - q.y) + (x - q.x) * (x - q.x)) {
 				bestIdx = i;
@@ -284,7 +284,7 @@ void OnMouseMeshStereoOnFactorGraph(int event, int x, int y, int flags, void *pa
 
 		void SaveMeshStereoResultToPly(cv::Mat &img, float maxDisp,
 			std::string workingDir, std::string plyFilePath, std::string textureFilePath,
-			std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
+			std::vector<cv::Point2f> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
 			std::vector<std::vector<SlantedPlane>> &triVertexBestLabels, cv::Mat &splitMap);
 		SaveMeshStereoResultToPly(imL, maxDisp, workingDir, plyFilePath, textureFilePath,
 			vertexCoords, triVertexInds, triVertexBestLabels, splitMap);

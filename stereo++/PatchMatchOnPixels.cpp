@@ -5,6 +5,7 @@
 #include "StereoAPI.h"
 #include "Timer.h"
 #include "SlantedPlane.h"
+#include "PostProcess.h"
 
 
 
@@ -121,6 +122,41 @@ MCImg<float> PrecomputeSimilarityWeights(cv::Mat &img, int patchRadius, int simG
 	}
 
 	return simWeights;
+}
+
+cv::Mat SlantedPlaneMapToDisparityMap(MCImg<SlantedPlane> &slantedPlanes)
+{
+	int numRows = slantedPlanes.h, numCols = slantedPlanes.w;
+	cv::Mat dispMap(numRows, numCols, CV_32FC1);
+
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			dispMap.at<float>(y, x) = slantedPlanes[y][x].ToDisparity(y, x);
+		}
+	}
+
+	return dispMap;
+}
+
+void PatchMatchOnPixelPostProcess(MCImg<SlantedPlane> &slantedPlanesL, MCImg<SlantedPlane> &slantedPlanesR,
+	cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR)
+{
+	dispL = SlantedPlaneMapToDisparityMap(slantedPlanesL);
+	dispR = SlantedPlaneMapToDisparityMap(slantedPlanesR);
+
+	cv::Mat validPixelMapL = CrossCheck(dispL, dispR, -1);
+	cv::Mat validPixelMapR = CrossCheck(dispR, dispL, +1);
+
+	DisparityHoleFilling(dispL, slantedPlanesL, validPixelMapL);
+	DisparityHoleFilling(dispR, slantedPlanesR, validPixelMapR);
+
+	validPixelMapL = CrossCheck(dispL, dispR, -1);
+	validPixelMapR = CrossCheck(dispR, dispL, +1);
+
+	bs::Timer::Tic("WMF");
+	WeightedMedianFilterInvalidPixels(dispL, validPixelMapL, imL);
+	WeightedMedianFilterInvalidPixels(dispR, validPixelMapR, imR);
+	bs::Timer::Toc();
 }
 
 void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR)

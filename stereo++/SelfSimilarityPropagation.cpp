@@ -11,7 +11,7 @@
 
 
 struct SortByLabDist {
-	bool operator ()(const std::pair<cv::Point2d, int> &a, const std::pair<cv::Point2d, int> &b) const {
+	bool operator ()(const std::pair<cv::Point2f, int> &a, const std::pair<cv::Point2f, int> &b) const {
 		return a.second < b.second;
 	}
 };

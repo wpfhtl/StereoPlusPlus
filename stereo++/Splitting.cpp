@@ -12,10 +12,10 @@
 #include "gco-v3.0/GCoptimization.h"
 
 
-void ConstructNeighboringTriangleGraph(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
-	std::vector<cv::Point2d> &baryCenters, std::vector<std::vector<int>> &nbIndices);
+void ConstructNeighboringTriangleGraph(int numRows, int numCols, std::vector<cv::Point2f> &vertexCoords, std::vector<std::vector<int>> &triVertexInds,
+	std::vector<cv::Point2f> &baryCenters, std::vector<std::vector<int>> &nbIndices);
 
-void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords,
+void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Point2f> &vertexCoords,
 	std::vector<std::vector<int>> &triVertexInds, std::vector<std::vector<cv::Point2i>> &triPixelLists);
 
 cv::Mat TriangleLabelToDisparityMap(int numRows, int numCols, std::vector<SlantedPlane> &slantedPlanes,
@@ -57,14 +57,14 @@ static void TriangleLabelVotedFromPixelwiseLabel(MCImg<SlantedPlane> &pixelwiseS
 	}
 }
 
-static cv::Mat DrawSplitMap(int numRows, int numCols, std::vector<cv::Point2d> &vertexCoords, std::vector<int> &labeling)
+static cv::Mat DrawSplitMap(int numRows, int numCols, std::vector<cv::Point2f> &vertexCoords, std::vector<int> &labeling)
 {
 	ASSERT(labeling.size() == vertexCoords.size());
 	cv::Mat canvas(numRows, numCols, CV_8UC3);
 	for (int i = 0; i < labeling.size(); i++) {
 		if (labeling[i]) {
-			cv::Point2d &p = vertexCoords[i];
-			cv::circle(canvas, p - cv::Point2d(0.5, 0.5), 0, cv::Scalar(0, 0, 255), 2, CV_AA);
+			cv::Point2f &p = vertexCoords[i];
+			cv::circle(canvas, p - cv::Point2f(0.5, 0.5), 0, cv::Scalar(0, 0, 255), 2, CV_AA);
 		}
 	}
 	return canvas;
@@ -110,12 +110,12 @@ void ComputeSplittingMap(std::string rootFolder)
 
 
 	// Step 2 - Obtain a labeling of triangles by using the pixelwise label at the bary centers of the triangle.
-	std::vector<cv::Point2d> vertexCoordsL;
+	std::vector<cv::Point2f> vertexCoordsL;
 	std::vector<std::vector<int>> triVertexIndsL;
 	Triangulate2DImage(imL, vertexCoordsL, triVertexIndsL);
 	cv::Mat triImgL = DrawTriangleImage(numRows, numCols, vertexCoordsL, triVertexIndsL);
 
-	std::vector<cv::Point2d> baryCentersL;
+	std::vector<cv::Point2f> baryCentersL;
 	std::vector<std::vector<int>> nbIndicesL, nbIndicesR;
 	ConstructNeighboringTriangleGraph(numRows, numCols, vertexCoordsL, triVertexIndsL, baryCentersL, nbIndicesL);
 
@@ -147,7 +147,7 @@ void ComputeSplittingMap(std::string rootFolder)
 	for (int id = 0; id < numTrianglesL; id++) {
 		for (int j = 0; j < 3; j++) {
 			int publicVertexIdx = triVertexIndsL[id][j];
-			cv::Point2d &p = vertexCoordsL[publicVertexIdx];
+			cv::Point2f &p = vertexCoordsL[publicVertexIdx];
 			dispSets[publicVertexIdx].push_back(slantedPlanesL[id].ToDisparity(p.y - 0.5, p.x - 0.5));
 		}
 	}
