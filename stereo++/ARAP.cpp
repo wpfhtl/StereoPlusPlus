@@ -15,6 +15,7 @@
 #include "SlantedPlane.h"
 #include "PostProcess.h"
 #include "ReleaseAssert.h"
+#include "Timer.h"
 
 
 
@@ -29,6 +30,75 @@ static struct SortByColCoord {
 		return a.first.x < b.first.x;
 	}
 };
+
+static cv::Mat DrawSegmentImage(cv::Mat &labelMap)
+{
+	double minVal, maxVal;
+	cv::minMaxIdx(labelMap, &minVal, &maxVal);
+	int numSegs = maxVal;
+	int numRows = labelMap.rows, numCols = labelMap.cols;
+
+	std::vector<cv::Vec3b> colors(numSegs);
+	for (int id = 0; id < numSegs; id++) {
+		colors[id] = cv::Vec3b(rand() % 256, rand() % 256, rand() % 256);
+	}
+
+	cv::Mat segImg(numRows, numCols, CV_8UC3);
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			segImg.at<cv::Vec3b>(y, x) = colors[labelMap.at<int>(y, x)];
+		}
+	}
+	return segImg;
+}
+
+static void ModifyGlobalSimilarityWeights(int sign, cv::Mat &labelMap, 
+	std::vector<cv::Point2f> &baryCenters, std::vector<std::vector<cv::Point2i>> &segPixelLists)
+{
+	ASSERT(sign == -1 || sign == +1);
+	extern MCImg<float>	gSimWeightsL;
+	extern MCImg<float>	gSimWeightsR;
+	MCImg<float> *simWeights = (sign == -1 ? &gSimWeightsL : &gSimWeightsR);
+
+	//printf("gSimWeightsL.data = %p\n", gSimWeightsL.data);
+	//printf("simWeights.data   = %p\n", simWeights.data);
+
+	extern int PATCHRADIUS;
+	extern int PATCHWIDTH;
+	int numRows = labelMap.rows, numCols = labelMap.cols;
+	int numSegs = baryCenters.size();
+
+	bs::Timer::Tic("Modifying similarity weights");
+	for (int id = 0; id < numSegs; id++) {
+		std::vector<cv::Point2i> &pixelList = segPixelLists[id];
+		for (int i = 0; i < pixelList.size(); i++) {
+			for (int j = i + 1; j < pixelList.size(); j++) {
+				int yI = pixelList[i].y;
+				int xI = pixelList[i].x;
+				int yJ = pixelList[j].y;
+				int xJ = pixelList[j].x;
+
+				float *wI = simWeights->line(yI * numCols + xI);
+				float *wJ = simWeights->line(yJ * numCols + xJ);
+				int idxJatI = (yJ - yI + PATCHRADIUS) * PATCHWIDTH + (xJ - xI + PATCHRADIUS);
+				int idxIatJ = (yI - yJ + PATCHRADIUS) * PATCHWIDTH + (xI - xJ + PATCHRADIUS);
+				wI[idxJatI] = 1.f;
+				wJ[idxIatJ] = 1.f;
+			}
+		}
+	}
+	bs::Timer::Toc();
+}
+
+static void VisualizeSimilarityWegiths(cv::Mat &img, MCImg<float> &simWeights)
+{
+	cv::Mat canvas = img.clone();
+	void *callbackParams[] = { &canvas, &simWeights };
+	cv::imshow("OnMouseVisualizeSimilarityWegiths", canvas);
+	void OnMouseVisualizeSimilarityWegiths(int event, int x, int y, int flags, void *param);
+	cv::setMouseCallback("OnMouseVisualizeSimilarityWegiths", OnMouseVisualizeSimilarityWegiths, callbackParams);
+	cv::waitKey(0);
+}
 
 static void ConstructBaryCentersAndPixelLists(int numSegs, cv::Mat &labelMap,
 	std::vector<cv::Point2f> &baryCenters, std::vector<std::vector<cv::Point2i>> &segPixelLists)
@@ -115,7 +185,8 @@ static void ConstructBaryCentersAndPixelLists(int numSegs, cv::Mat &labelMap,
 #endif
 }
 
-static void ConstructNeighboringSegmentGraph(int numSegs, cv::Mat &labelMap, std::vector<std::vector<int>> &nbGraph)
+static void ConstructNeighboringSegmentGraph(int numSegs, cv::Mat &labelMap, 
+	std::vector<std::vector<int>> &nbGraph, bool useLargeNeighborhood = false)
 {
 	// This function has assumed all pixels are labeled.
 	// And the label index starts from zero.
@@ -139,10 +210,28 @@ static void ConstructNeighboringSegmentGraph(int numSegs, cv::Mat &labelMap, std
 			}
 		}
 	}
-
-	for (int id = 0; id < numSegs; id++) {
-		nbGraph[id] = std::vector<int>(nbIdxSets[id].begin(), nbIdxSets[id].end());
+	if (!useLargeNeighborhood) {
+		for (int id = 0; id < numSegs; id++) {
+			nbGraph[id] = std::vector<int>(nbIdxSets[id].begin(), nbIdxSets[id].end());
+		}
 	}
+	else {
+		std::vector<std::set<int>> extNbIdxSets(numSegs);
+		for (int id = 0; id < numSegs; id++) {
+			// Merge the neighbors of its neighbors to form bigger neighborhood.
+			std::set<int> &nbs = nbIdxSets[id];
+			extNbIdxSets[id] = nbs;
+			for (std::set<int>::iterator it = nbs.begin(); it != nbs.end(); it++) {
+				int nbId = *it;
+				std::set<int> &newNbs = nbIdxSets[nbId];
+				extNbIdxSets[id].insert(newNbs.begin(), newNbs.end());
+			}
+		}
+		for (int id = 0; id < numSegs; id++) {
+			nbGraph[id] = std::vector<int>(extNbIdxSets[id].begin(), extNbIdxSets[id].end());
+		}
+	}
+	
 }
 
 static void ComputeSegmentSimilarityWeights(cv::Mat &img, std::vector<std::vector<int>> &nbGraph,
@@ -230,7 +319,7 @@ static float ConstrainedPatchMatchCost(float yc, float xc, SlantedPlane &newGues
 	cv::Vec3f nL(newGuess.nx, newGuess.ny, newGuess.nz);
 	float uL = newGuess.ToDisparity(yc, xc) / maxDisp;
 	vL /= maxDisp;
-	float smoothCost = (nL - mL).dot(nL - mL) + (uL - vL) * (uL - vL);
+	float smoothCost = (nL - mL).dot(nL - mL);// +(uL - vL) * (uL - vL);
 	return dataCost + 0.5 * theta * smoothCost;
 }
 
@@ -244,19 +333,19 @@ static void ImproveGuess(float y, float x, SlantedPlane &oldGuess, SlantedPlane 
 	}
 }
 
-static void PropagateAndRandomSearch(int id, int sign, float maxDisp, float theta,
+static void PropagateAndRandomSearch(int id, int sign, float maxDisp, float theta, float gSmooth,
 	cv::Point2f &srcPos, std::vector<SlantedPlane> &slantedPlanes, std::vector<float> &bestCosts, 
 	std::vector<std::vector<int>> &nbGraph, std::vector<cv::Vec3f> &mL, cv::vector<float> &vL)
 {
-	int y = srcPos.y + 0.5;
-	int x = srcPos.x + 0.5;
+	float y = srcPos.y;
+	float x = srcPos.x;
 
 	// Spatial propgation
 	std::vector<int> &nbIds = nbGraph[id];
 	for (int i = 0; i < nbIds.size(); i++) {
 		SlantedPlane newGuess = slantedPlanes[nbIds[i]];
 		ImproveGuess(y, x, slantedPlanes[id], newGuess, bestCosts[id], 
-			mL[id], vL[id], maxDisp, theta, sign);
+			mL[id], vL[id], maxDisp, theta * gSmooth, sign);
 	}
 
 	// Random search
@@ -265,7 +354,17 @@ static void PropagateAndRandomSearch(int id, int sign, float maxDisp, float thet
 	while (zRadius >= 0.1f) {
 		SlantedPlane newGuess = SlantedPlane::ConstructFromRandomPertube(slantedPlanes[id], y, x, nRadius, zRadius);
 		ImproveGuess(y, x, slantedPlanes[id], newGuess, bestCosts[id], 
-			mL[id], vL[id], maxDisp, theta, sign);
+			mL[id], vL[id], maxDisp, theta * gSmooth, sign);
+
+		if (1 && (y > 330)) {
+			// Special treament for ground planes
+			for (int retry = 0; retry < 5; retry++) {
+				float curDisp = slantedPlanes[id].ToDisparity(y, x);
+				SlantedPlane newGuess = SlantedPlane::ConstructFromGroundPlaneProposal(y, x, curDisp, zRadius);
+				ImproveGuess(y, x, slantedPlanes[id], newGuess, bestCosts[id],
+					mL[id], vL[id], maxDisp, theta * gSmooth, sign);
+			}
+		}
 		zRadius /= 2.f;
 		nRadius /= 2.f;
 	}
@@ -273,7 +372,7 @@ static void PropagateAndRandomSearch(int id, int sign, float maxDisp, float thet
 
 static void ConstrainedPatchMatchOnSegments(int sign, float theta, float maxDisp, int maxIters, bool doRandInit,
 	std::vector<cv::Vec3f> &nL, std::vector<float> &uL, std::vector<cv::Vec3f> &mL, std::vector<float> &vL,
-	std::vector<cv::Point2f> &baryCentersL, std::vector<std::vector<int>> &nbGraphL,
+	std::vector<float>& gSmoothL, std::vector<cv::Point2f> &baryCentersL, std::vector<std::vector<int>> &nbGraphL,
 	std::vector<std::vector<float>> &nbSimWeightsL, std::vector<std::vector<cv::Point2i>> &segPixelListsL)
 {
 	// Assemble the n, d to SlantedPlane
@@ -312,7 +411,8 @@ static void ConstrainedPatchMatchOnSegments(int sign, float theta, float maxDisp
 		printf("ConstrainedPatchMatchOnSegments round %d ...\n", round);
 		for (int i = 0; i < numSegsL; i++) {
 			int id = idListL[i];
-			PropagateAndRandomSearch(id, sign, maxDisp, theta, baryCentersL[id], slantedPlanesL, bestCostsL, nbGraphL, mL, vL);
+			PropagateAndRandomSearch(id, sign, maxDisp, theta, gSmoothL[id], 
+				baryCentersL[id], slantedPlanesL, bestCostsL, nbGraphL, mL, vL);
 		}
 		std::reverse(idListL.begin(), idListL.end());
 	}
@@ -412,13 +512,13 @@ static void ARAPPostProcess(int numRows, int numCols, std::vector<cv::Vec3f> &nL
 	cv::Mat validPixelMapL = CrossCheck(dispL, dispR, -1);
 	cv::Mat validPixelMapR = CrossCheck(dispR, dispL, +1);
 
-	std::vector<float> confidenceL = DetermineConfidence(validPixelMapL, segPixelListsL);
-	std::vector<float> confidenceR = DetermineConfidence(validPixelMapR, segPixelListsR);
+	gL = DetermineConfidence(validPixelMapL, segPixelListsL);
+	gR = DetermineConfidence(validPixelMapR, segPixelListsR);
 
 	// Step 2 - Occlusion Filling
 	// Replace the low-confidence triangles with their high-confidence neighbors
-	SegmentOcclusionFilling(numRows, numCols, slantedPlanesL, baryCentersL, nbGraphL, confidenceL, segPixelListsL);
-	SegmentOcclusionFilling(numRows, numCols, slantedPlanesR, baryCentersR, nbGraphR, confidenceR, segPixelListsR);
+	SegmentOcclusionFilling(numRows, numCols, slantedPlanesL, baryCentersL, nbGraphL, gL, segPixelListsL);
+	SegmentOcclusionFilling(numRows, numCols, slantedPlanesR, baryCentersR, nbGraphR, gR, segPixelListsR);
 
 	// Step 3 - WMF
 	// Finally, an optional pixelwise filtering
@@ -431,8 +531,8 @@ static void ARAPPostProcess(int numRows, int numCols, std::vector<cv::Vec3f> &nL
 	validPixelMapL = CrossCheck(dispL, dispR, -1); 
 	validPixelMapR = CrossCheck(dispR, dispL, +1);
 
-	gL = DetermineConfidence(validPixelMapL, segPixelListsL);
-	gR = DetermineConfidence(validPixelMapR, segPixelListsR);
+	//gL = DetermineConfidence(validPixelMapL, segPixelListsL);
+	//gR = DetermineConfidence(validPixelMapR, segPixelListsR);
 
 	SlantedPlanesToNormalDepth(slantedPlanesL, baryCentersL, nL, uL);
 	SlantedPlanesToNormalDepth(slantedPlanesR, baryCentersR, nR, uR);
@@ -469,53 +569,77 @@ static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	ConstructBaryCentersAndPixelLists(numSegsR, labelMapR, baryCentersR, segPixelListsR);
 
 	std::vector<std::vector<int>> nbGraphL, nbGraphR;	
-	ConstructNeighboringSegmentGraph(numSegsL, labelMapL, nbGraphL);
-	ConstructNeighboringSegmentGraph(numSegsR, labelMapR, nbGraphR);
+	ConstructNeighboringSegmentGraph(numSegsL, labelMapL, nbGraphL, 0);
+	ConstructNeighboringSegmentGraph(numSegsR, labelMapR, nbGraphR, 0);
 
 	std::vector<std::vector<float>> nbSimWeightsL, nbSimWeightsR;
 	ComputeSegmentSimilarityWeights(imL, nbGraphL, segPixelListsL, nbSimWeightsL);
 	ComputeSegmentSimilarityWeights(imR, nbGraphR, segPixelListsR, nbSimWeightsR);
 	
+	//srand(2466700234);
+	ModifyGlobalSimilarityWeights(-1, labelMapL, baryCentersL, segPixelListsL);
+	ModifyGlobalSimilarityWeights(+1, labelMapR, baryCentersR, segPixelListsR);
+	//VisualizeSimilarityWegiths(segImgL, gSimWeightsL);
 
 
 	// Variables being optimized:
+	// n, m are normals; u, v are disparities; g are confidence.
 	std::vector<cv::Vec3f>	nL(numSegsL), nR(numSegsR), mL(numSegsL), mR(numSegsR);
 	std::vector<float>		uL(numSegsL), uR(numSegsR), vL(numSegsL), vR(numSegsR);
-	std::vector<float>		gL(numSegsL, 0.f), gR(numSegsR, 0.f);  // confidence of each segment
+	std::vector<float>		gDataL(numSegsL, 0.f), gSmoothL(numSegsR, 0.f);  
+	std::vector<float>		gDataR(numSegsL, 0.f), gSmoothR(numSegsR, 0.f);
+
+	struct ARAPEvalParams {
+		int numRows, numCols;
+		std::vector<SlantedPlane> *slantedPlanes;
+		std::vector<std::vector<int>> *nbGraph;
+		std::vector<std::vector<cv::Point2i>> *segPixelLists;
+		ARAPEvalParams() : numRows(0), numCols(0), slantedPlanes(NULL), nbGraph(NULL), segPixelLists(NULL) {}
+	};
 
 	// Optimization starts
 	ConstrainedPatchMatchOnSegments(-1, 0.f, maxDisp, 4, true,
-		nL, uL, mL, vL, baryCentersL, nbGraphL, nbSimWeightsL, segPixelListsL);
+		nL, uL, mL, vL, gSmoothL, baryCentersL, nbGraphL, nbSimWeightsL, segPixelListsL);
 	ConstrainedPatchMatchOnSegments(+1, 0.f, maxDisp, 4, true,
-		nR, uR, mR, vR, baryCentersR, nbGraphR, nbSimWeightsR, segPixelListsR);
+		nR, uR, mR, vR, gSmoothR, baryCentersR, nbGraphR, nbSimWeightsR, segPixelListsR);
 	cv::Mat &disp = SegmentLabelToDisparityMap(numRows, numCols, nL, uL, baryCentersL, segPixelListsL);
 	printf("Evaluating *** DispDataL ***\n");
 	EvaluateDisparity(rootFolder, disp, 0.5f);
 
-	for (float theta = 0.f; theta <= 2.f; theta += 0.2f) {
+
+	for (float theta = 0.1f; theta <= 2.f; theta += 0.2f) {
 		printf("theta = %f\n", theta);
-
-		// Optimize E_SMOOTH
-		SolveARAPSmoothness(theta, gL, nbGraphL, nbSimWeightsL, nL, uL, mL, vL);
-		SolveARAPSmoothness(theta, gR, nbGraphR, nbSimWeightsR, nR, uR, mR, vR);
-
-		cv::Mat &dispSmoothL = SegmentLabelToDisparityMap(numRows, numCols, mL, vL, baryCentersL, segPixelListsL);
-		printf("Evaluating *** DispSmoothL ***\n");
-		EvaluateDisparity(rootFolder, dispSmoothL, 0.5f);
-
+		 
+		//////////////////////////////////////////////////////////////////////////////////////////
 		// Optimize E_DATA
 		ConstrainedPatchMatchOnSegments(-1, theta, maxDisp, 2, false,
-			nL, uL, mL, vL, baryCentersL, nbGraphL, nbSimWeightsL, segPixelListsL);
+			nL, uL, mL, vL, gSmoothL, baryCentersL, nbGraphL, nbSimWeightsL, segPixelListsL);
 		ConstrainedPatchMatchOnSegments(+1, theta, maxDisp, 2, false,
-			nR, uR, mR, vR, baryCentersR, nbGraphR, nbSimWeightsR, segPixelListsR);
+			nR, uR, mR, vR, gSmoothR, baryCentersR, nbGraphR, nbSimWeightsR, segPixelListsR);
 
-		cv::Mat &dispDataL = SegmentLabelToDisparityMap(numRows, numCols, nL, uL, baryCentersL, segPixelListsL);
 		printf("Evaluating *** DispDataL ***\n");
+		cv::Mat &dispDataL = SegmentLabelToDisparityMap(numRows, numCols, nL, uL, baryCentersL, segPixelListsL);
 		EvaluateDisparity(rootFolder, dispDataL, 0.5f);
-	
-		// Post Process for Robustness
-		ARAPPostProcess(numRows, numCols, nL, nR, uL, uR, gL, gR, baryCentersL, baryCentersR,
+
+		// Post process data map robustness
+		ARAPPostProcess(numRows, numCols, nL, nR, uL, uR, gDataL, gDataR, baryCentersL, baryCentersR,
 			nbGraphL, nbGraphR, nbSimWeightsL, nbSimWeightsR, segPixelListsL, segPixelListsR);
+		//////////////////////////////////////////////////////////////////////////////////////////
+
+
+		//////////////////////////////////////////////////////////////////////////////////////////
+		// Optimize E_SMOOTH
+		SolveARAPSmoothness(theta, gDataL, nbGraphL, nbSimWeightsL, nL, uL, mL, vL);
+		SolveARAPSmoothness(theta, gDataR, nbGraphR, nbSimWeightsR, nR, uR, mR, vR);
+
+		printf("Evaluating *** DispSmoothL ***\n");
+		cv::Mat &dispSmoothL = SegmentLabelToDisparityMap(numRows, numCols, mL, vL, baryCentersL, segPixelListsL);
+		EvaluateDisparity(rootFolder, dispSmoothL, 0.5f);
+
+		// Post process smooth map for robustness
+		ARAPPostProcess(numRows, numCols, mL, mR, vL, vR, gSmoothL, gSmoothR, baryCentersL, baryCentersR,
+			nbGraphL, nbGraphR, nbSimWeightsL, nbSimWeightsR, segPixelListsL, segPixelListsR);
+		//////////////////////////////////////////////////////////////////////////////////////////
 	}
 
 	cv::Mat &dispDataL = SegmentLabelToDisparityMap(numRows, numCols, nL, uL, baryCentersL, segPixelListsL);

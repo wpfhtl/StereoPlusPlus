@@ -321,3 +321,33 @@ void OnMouseGroundTruthPlaneStatistics(int event, int x, int y, int flags, void 
 		}
 	}
 }
+
+void OnMouseVisualizeSimilarityWegiths(int event, int x, int y, int flags, void *param)
+{
+	cv::Mat &canvas = *(cv::Mat*)((void**)param)[0];
+	MCImg<float> &simWeights = *(MCImg<float>*)((void**)param)[1];
+
+	int numRows = canvas.rows, numCols = canvas.cols;
+	if (event == CV_EVENT_LBUTTONDOWN)
+	{
+		cv::Mat tmp = canvas.clone();
+		extern int PATCHRADIUS;
+		int yc = y, xc = x;
+		float *w = simWeights.line(yc * numCols + xc);
+
+		for (int id = 0, y = yc - PATCHRADIUS; y <= yc + PATCHRADIUS; y++) {
+			for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x++, id++) {
+				if (InBound(y, x, numRows, numCols)) {
+					unsigned char b = 255 * w[id];
+					tmp.at<cv::Vec3b>(y, x) = cv::Vec3b(b, b, b);
+				}
+			}
+		}
+		cv::imshow("OnMouseVisualizeSimilarityWegiths", tmp);
+	}
+}
+
+void OnMouseTestARAP(int event, int x, int y, int flags, void *param)
+{
+
+}

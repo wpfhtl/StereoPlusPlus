@@ -6,10 +6,16 @@
 #include <algorithm>
 
 
+
+
 struct SlantedPlane {
 	// The class has been updated to make sure that nz is always positive.
 	float a, b, c;
 	float nx, ny, nz;
+	static float Randf(float lowerBound, float upperBound)
+	{
+		return lowerBound + ((float)rand() / RAND_MAX) * (upperBound - lowerBound);
+	}
 	SlantedPlane() {}
 	SlantedPlane(float a_, float b_, float c_, float nx_, float ny_, float nz_)
 		:a(a_), b(b_), c(c_), nx(nx_), ny(ny_), nz(nz_) {}
@@ -58,12 +64,10 @@ struct SlantedPlane {
 	}
 	static SlantedPlane ConstructFromRandomInit(float y, float x, float maxDisp)
 	{
-		const int RAND_HALF = RAND_MAX / 2;
-
-		float z = maxDisp * ((double)rand() / RAND_MAX);
-		float nx = ((float)rand() - RAND_HALF) / RAND_HALF;
-		float ny = ((float)rand() - RAND_HALF) / RAND_HALF;
-		float nz = ((float)rand() - RAND_HALF) / RAND_HALF;
+		float z  = maxDisp * Randf(0, 1);
+		float nx = Randf(-1, 1);
+		float ny = Randf(-1, 1);
+		float nz = Randf( 0, 1);
 
 		float norm = std::max(1e-4f, sqrt(nx*nx + ny*ny + nz*nz));
 		nx /= norm;
@@ -75,11 +79,9 @@ struct SlantedPlane {
 	}
 	static SlantedPlane ConstructFromRandomPertube(SlantedPlane &perturbCenter, float y, float x, float nRadius, float zRadius)
 	{
-		const int RAND_HALF = RAND_MAX / 2;
-
-		float nx = perturbCenter.nx + nRadius * (((float)rand() - RAND_HALF) / RAND_HALF);
-		float ny = perturbCenter.ny + nRadius * (((float)rand() - RAND_HALF) / RAND_HALF);
-		float nz = perturbCenter.nz + nRadius * (((float)rand() - RAND_HALF) / RAND_HALF);
+		float nx = perturbCenter.nx + nRadius * Randf(-1, 1);
+		float ny = perturbCenter.ny + nRadius * Randf(-1, 1);
+		float nz = perturbCenter.nz + nRadius * Randf(-1, 1);
 
 		float norm = std::max(1e-4f, sqrt(nx*nx + ny*ny + nz*nz));
 		nx /= norm;
@@ -87,10 +89,23 @@ struct SlantedPlane {
 		nz /= norm;
 
 		float z = perturbCenter.ToDisparity(y, x)
-			+ zRadius * (((float)rand() - RAND_HALF) / RAND_HALF);
+			+ zRadius * Randf(-1, 1);
 
 		// nz will always be positive after invoking ConstructFromNormalDepthAndCoord
 		return ConstructFromNormalDepthAndCoord(nx, ny, nz, z, y, x);
+	}
+	static SlantedPlane ConstructFromGroundPlaneProposal(float y, float x, float curDisp, float zRadius)
+	{
+		/* Usually, the nz value of the ground plane are between 0.65 - 0.85
+		 * the nx are ofen neglectable, ny are always negative due to ground 
+		 * Plane's slanted direction */
+		float minNz = 0.7;
+		float maxNz = 0.85;
+		float nz = Randf(minNz, maxNz);
+		float nx = Randf(-0.05, +0.05);
+		float ny = -sqrt(1 - nx*nx - nz*nz);
+		float d = curDisp + zRadius * Randf(-1, 1);
+		return ConstructFromNormalDepthAndCoord(nx, ny, nz, d, y, x);
 	}
 	float ToDisparity(int y, int x)
 	{

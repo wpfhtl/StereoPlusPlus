@@ -42,7 +42,7 @@ std::string runId;
 
 int main(int argc, char** argv)
 {
-	srand(12345);
+	//srand(12345);
 
 
 	extern int PROGRAM_ENTRY;
