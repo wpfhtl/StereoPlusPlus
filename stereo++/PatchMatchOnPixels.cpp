@@ -188,6 +188,11 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 		}
 	}
 
+	struct PatchMatchOnPixelEvalParams {
+		MCImg<SlantedPlane> *slantedPlanes;
+		cv::Mat *bestCosts;
+		PatchMatchOnPixelEvalParams() : slantedPlanes(NULL), bestCosts(NULL) {}
+	};
 
 	// Step 2 - Spatial propagation and random search
 	for (int round = 0; round < MAX_PATCHMATCH_ITERS; round++) {
@@ -213,19 +218,19 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 		dispL = SlantedPlaneMapToDisparityMap(slantedPlanesL);
 		dispR = SlantedPlaneMapToDisparityMap(slantedPlanesR);
 
-		std::vector<std::pair<std::string, void*>> auxParams;
-		auxParams.push_back(std::pair<std::string, void*>("slantedPlanesL", &slantedPlanesL));
-		auxParams.push_back(std::pair<std::string, void*>("bestCostsL",     &bestCostsL));
-		EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams, "OnMousePatchMatchOnPixels");
+		PatchMatchOnPixelEvalParams evalParams;
+		evalParams.slantedPlanes	= &slantedPlanesL;
+		evalParams.bestCosts		= &bestCostsL;
+		EvaluateDisparity(rootFolder, dispL, 0.5f, &evalParams, "OnMousePatchMatchOnPixels");
 	}
 
 
 	// Step 3 - Cross check and post-process
 	PatchMatchOnPixelPostProcess(slantedPlanesL, slantedPlanesR, imL, imR, dispL, dispR);
-	std::vector<std::pair<std::string, void*>> auxParams;
-	auxParams.push_back(std::pair<std::string, void*>("slantedPlanesL", &slantedPlanesL));
-	auxParams.push_back(std::pair<std::string, void*>("bestCostsL", &bestCostsL));
-	EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams, "OnMousePatchMatchOnPixels");
+	PatchMatchOnPixelEvalParams evalParams;
+	evalParams.slantedPlanes = &slantedPlanesL;
+	evalParams.bestCosts = &bestCostsL;
+	EvaluateDisparity(rootFolder, dispL, 0.5f, &evalParams, "OnMousePatchMatchOnPixels");
 
 	slantedPlanesL.SaveToBinaryFile("d:/" + rootFolder + "SlantedPlanesL.bin");
 	slantedPlanesR.SaveToBinaryFile("d:/" + rootFolder + "SlantedPlanesR.bin");

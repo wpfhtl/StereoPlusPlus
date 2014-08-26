@@ -747,6 +747,13 @@ cv::Mat MeshStereoBPOnFG::DecodeDisparityMapFromBeliefs(int numRows, int numCols
 
 void MeshStereoBPOnFG::Run(std::string rootFolder, int maxIters, float tol)
 {
+	struct MeshStereoBPOnFGEvalParams {
+		cv::Mat *triImg;
+		cv::Mat *splitMap;
+		MeshStereoBPOnFG *obj;
+		MeshStereoBPOnFGEvalParams() : triImg(0), splitMap(0), obj(0) {}
+	};
+
 	cv::Mat imL = cv::imread("d:/data/stereo/" + rootFolder + "/im2.png");
 	int numRows = imL.rows, numCols = imL.cols;
 
@@ -754,9 +761,9 @@ void MeshStereoBPOnFG::Run(std::string rootFolder, int maxIters, float tol)
 		printf("Doing iteration: %d\n", iter);
 
 		float maxBeliefDiff = RunNextIteration();
-		//cv::Mat splitMap = DecodeSplitMapFromBeliefs(numRows, numCols, allBeliefs);
+		cv::Mat splitMap = DecodeSplitMapFromBeliefs(numRows, numCols, allBeliefs);
 		cv::Mat splitImg = DecodeSplittingImageFromBeliefs(numRows, numCols, allBeliefs);
-		//cv::Mat dispL = DecodeDisparityMapFromBeliefs(numRows, numCols, allBeliefs, triVertexBestLabels, 1);
+		cv::Mat dispL = DecodeDisparityMapFromBeliefs(numRows, numCols, allBeliefs, triVertexBestLabels, 1);
 
 		//std::vector<std::pair<std::string, void*>> auxParams;
 		//auxParams.push_back(std::pair<std::string, void*>("triImg", &splitImg));
@@ -764,6 +771,13 @@ void MeshStereoBPOnFG::Run(std::string rootFolder, int maxIters, float tol)
 		//auxParams.push_back(std::pair<std::string, void*>("MeshStereoBPOnFGObject", this));
 		//EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams, "OnMouseMeshStereoOnFactorGraph");
 		
+		MeshStereoBPOnFGEvalParams evalParams;
+		evalParams.triImg = &splitImg;
+		evalParams.splitMap = &splitMap;
+		evalParams.obj = this;
+		EvaluateDisparity(rootFolder, dispL, 0.5f, &evalParams, "OnMouseMeshStereoOnFactorGraph");
+
+
 		//EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
 		//EvaluateDisparity(rootFolder, dispL);
 		if (maxBeliefDiff < tol) {
@@ -773,7 +787,7 @@ void MeshStereoBPOnFG::Run(std::string rootFolder, int maxIters, float tol)
 
 		int numDisps, maxDisp, visualizeScale;
 		SetupStereoParameters(rootFolder, numDisps, maxDisp, visualizeScale);
-		cv::Mat dispL = DecodeDisparityMapFromBeliefs(numRows, numCols, allBeliefs, triVertexBestLabels, 1);
+		/*cv::Mat*/ dispL = DecodeDisparityMapFromBeliefs(numRows, numCols, allBeliefs, triVertexBestLabels, 1);
 		cv::cvtColor(dispL, dispL, CV_GRAY2BGR);
 		dispL.convertTo(dispL, CV_8UC3, visualizeScale);
 		char filePath[1024];
@@ -787,11 +801,20 @@ void MeshStereoBPOnFG::Run(std::string rootFolder, int maxIters, float tol)
 	cv::Mat splitImg = DecodeSplittingImageFromBeliefs(numRows, numCols, allBeliefs);
 	cv::Mat dispL = DecodeDisparityMapFromBeliefs(numRows, numCols, allBeliefs, triVertexBestLabels, 1);
 
-	std::vector<std::pair<std::string, void*>> auxParams;
-	auxParams.push_back(std::pair<std::string, void*>("triImg", &splitImg));
-	auxParams.push_back(std::pair<std::string, void*>("splitMap", &splitMap));
-	auxParams.push_back(std::pair<std::string, void*>("MeshStereoBPOnFGObject", this));
-	EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams, "OnMouseMeshStereoOnFactorGraph");
+
+	//std::vector<std::pair<std::string, void*>> auxParams;
+	//auxParams.push_back(std::pair<std::string, void*>("triImg", &splitImg));
+	//auxParams.push_back(std::pair<std::string, void*>("splitMap", &splitMap));
+	//auxParams.push_back(std::pair<std::string, void*>("MeshStereoBPOnFGObject", this));
+	//EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams, "OnMouseMeshStereoOnFactorGraph");
+
+
+	
+	MeshStereoBPOnFGEvalParams evalParams;
+	evalParams.triImg	= &splitImg;
+	evalParams.splitMap = &splitMap;
+	evalParams.obj		= this;
+	EvaluateDisparity(rootFolder, dispL, 0.5f, &evalParams, "OnMouseMeshStereoOnFactorGraph");
 }
 /////////////////////////////////////////////////////  End of MeshStereoBPOnFG  /////////////////////////////////////////////////////
 

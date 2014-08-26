@@ -222,7 +222,7 @@ void ComputeSplittingMap(std::string rootFolder)
 		cv::Mat splitImg = DrawSplitMap(numRows, numCols, vertexCoordsL, labeling);
 		std::vector<std::pair<std::string, void*>> auxParams;
 		auxParams.push_back(std::pair<std::string, void*>("triImg", &splitImg));
-		EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
+		EvaluateDisparity(rootFolder, dispL, 0.5f/*, auxParams*/);
 		//cv::imshow("splitImg", splitImg);
 		//cv::waitKey(0);
 	}

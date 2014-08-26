@@ -187,6 +187,13 @@ static cv::Mat DecodeDisparityFromBeliefs(MCImg<float> &allBeliefs)
 
 static cv::Mat RunLoopyBPOnGrideGraph(std::string rootFolder, MCImg<float> &unaryCosts, cv::Mat &imL)
 {
+	struct LoopyBPOnGridGraphEvalParams {
+		MCImg<float> *allMessages;
+		MCImg<float> *allBeliefs;
+		MCImg<float> *unaryCosts;
+		LoopyBPOnGridGraphEvalParams() : allMessages(0), allBeliefs(0), unaryCosts(0) {}
+	};
+
 	int numRows = unaryCosts.h, numCols = unaryCosts.w, numDisps = unaryCosts.n;
 	std::vector<cv::Point2i> pixelList(numRows * numCols);
 	for (int y = 0, id = 0; y < numRows; y++) {
@@ -211,13 +218,20 @@ static cv::Mat RunLoopyBPOnGrideGraph(std::string rootFolder, MCImg<float> &unar
 	const int maxBPRound = 100;
 	for (int round = 0; round < maxBPRound && maxBeliefDiff > 1e-7; round++) {
 		int tic = clock();
-		if (round % 1 == -1) {
+		if (round % 1 == 0) {
 			cv::Mat dispMap = DecodeDisparityFromBeliefs(allBeliefs);
-			std::vector<std::pair<std::string, void*>> auxParams;
-			auxParams.push_back(std::pair<std::string, void*>("allMessages", &oldMessages));
-			auxParams.push_back(std::pair<std::string, void*>("allBeliefs",  &allBeliefs));
-			auxParams.push_back(std::pair<std::string, void*>("unaryCosts",   &unaryCosts));
-			EvaluateDisparity(rootFolder, dispMap, 1.f, auxParams, "OnMouseLoopyBPOnGridGraph");
+			
+			//std::vector<std::pair<std::string, void*>> auxParams;
+			//auxParams.push_back(std::pair<std::string, void*>("allMessages", &oldMessages));
+			//auxParams.push_back(std::pair<std::string, void*>("allBeliefs",  &allBeliefs));
+			//auxParams.push_back(std::pair<std::string, void*>("unaryCosts",   &unaryCosts));
+			//EvaluateDisparity(rootFolder, dispMap, 1.f, auxParams, "OnMouseLoopyBPOnGridGraph");
+
+			LoopyBPOnGridGraphEvalParams evalParams;
+			evalParams.allMessages = &oldMessages;
+			evalParams.allBeliefs  = &allBeliefs;
+			evalParams.unaryCosts  = &unaryCosts;
+			EvaluateDisparity(rootFolder, dispMap, 1.f, &evalParams, "OnMouseLoopyBPOnGridGraph");
 		}
 
 
@@ -284,24 +298,24 @@ void RunLoopyBP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	for (int d = 0; d < 16; d++) {
 		printf("%f\n", unaryCosts.get(116, 216)[d]);
 	}
-	//cv::Mat uselessCost(numRows, numCols, CV_8UC3);
-	//uselessCost.setTo(cv::Vec3b(0, 0, 0));
-	//extern float COLORGRADALPHA;
-	//extern float COLORMAXDIFF;
-	//extern float GRADMAXDIFF;
-	//float cutoff = COLORGRADALPHA * COLORMAXDIFF + (1 - COLORGRADALPHA) * GRADMAXDIFF;
-	//for (int y = 0; y < numRows; y++) {
-	//	for (int x=  0; x < numCols; x++) {
-	//		for (int d = 0; d < numDisps; d++) {
-	//			if (unaryCosts.get(y, x)[d] < cutoff) {
-	//				uselessCost.at<cv::Vec3b>(y, x) = cv::Vec3b(255, 255, 255);
-	//				break;
-	//			}
-	//		}
-	//	}
-	//}
-	//cv::imshow("dark is useless", uselessCost);
-	//cv::waitKey(0);
+	/*cv::Mat uselessCost(numRows, numCols, CV_8UC3);
+	uselessCost.setTo(cv::Vec3b(0, 0, 0));
+	extern float COLORGRADALPHA;
+	extern float COLORMAXDIFF;
+	extern float GRADMAXDIFF;
+	float cutoff = COLORGRADALPHA * COLORMAXDIFF + (1 - COLORGRADALPHA) * GRADMAXDIFF;
+	for (int y = 0; y < numRows; y++) {
+		for (int x=  0; x < numCols; x++) {
+			for (int d = 0; d < numDisps; d++) {
+				if (unaryCosts.get(y, x)[d] < cutoff) {
+					uselessCost.at<cv::Vec3b>(y, x) = cv::Vec3b(255, 255, 255);
+					break;
+				}
+			}
+		}
+	}
+	cv::imshow("dark is useless", uselessCost);
+	cv::waitKey(0);*/
 #else
 	#pragma omp parallel for
 	for (int y = 0; y < numRows; y++) {

@@ -19,6 +19,21 @@
 
 
 
+struct ARAPEvalParams {
+	int numRows, numCols;
+	cv::Mat *labelMap;
+	cv::Mat *confidenceImg;
+	std::vector<cv::Point2f> *baryCenters;
+	std::vector<cv::Vec3f> *n;
+	std::vector<float> *u;
+	std::vector<std::vector<int>> *nbGraph;
+	std::vector<std::vector<cv::Point2i>> *segPixelLists;
+	ARAPEvalParams() : numRows(0), numCols(0), labelMap(0), baryCenters(0),
+		n(0), u(0), nbGraph(0), segPixelLists(0), confidenceImg(0) {}
+};
+
+static ARAPEvalParams evalParams;
+
 static struct SortByRowCoord {
 	bool operator ()(const std::pair<cv::Point2f, int> &a, const std::pair<cv::Point2f, int> &b) const {
 		return a.first.y < b.first.y;
@@ -542,9 +557,10 @@ static void ARAPPostProcess(int numRows, int numCols, std::vector<cv::Vec3f> &nL
 	//cv::imshow("confidenceL", confidenceImgL);
 #if 1
 	extern std::string ROOTFOLDER;
-	std::vector<std::pair<std::string, void*>> auxParams;
-	auxParams.push_back(std::pair<std::string, void*>("triImg", &confidenceImgL));
-	EvaluateDisparity(ROOTFOLDER, dispL, 0.5f, auxParams);
+	evalParams.confidenceImg = &confidenceImgL;
+	evalParams.n = &nL;
+	evalParams.u = &uL;
+	EvaluateDisparity(ROOTFOLDER, dispL, 0.5f, &evalParams, "OnMouseTestARAP");
 #endif
 }
 
@@ -589,22 +605,24 @@ static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	std::vector<float>		gDataL(numSegsL, 0.f), gSmoothL(numSegsR, 0.f);  
 	std::vector<float>		gDataR(numSegsL, 0.f), gSmoothR(numSegsR, 0.f);
 
-	struct ARAPEvalParams {
-		int numRows, numCols;
-		std::vector<SlantedPlane> *slantedPlanes;
-		std::vector<std::vector<int>> *nbGraph;
-		std::vector<std::vector<cv::Point2i>> *segPixelLists;
-		ARAPEvalParams() : numRows(0), numCols(0), slantedPlanes(NULL), nbGraph(NULL), segPixelLists(NULL) {}
-	};
+	
+	evalParams.numRows			= numRows;
+	evalParams.numCols			= numCols;
+	evalParams.labelMap			= &labelMapL;
+	evalParams.baryCenters		= &baryCentersL;
+	evalParams.nbGraph			= &nbGraphL;
+	evalParams.segPixelLists	= &segPixelListsL;
 
 	// Optimization starts
 	ConstrainedPatchMatchOnSegments(-1, 0.f, maxDisp, 4, true,
 		nL, uL, mL, vL, gSmoothL, baryCentersL, nbGraphL, nbSimWeightsL, segPixelListsL);
 	ConstrainedPatchMatchOnSegments(+1, 0.f, maxDisp, 4, true,
 		nR, uR, mR, vR, gSmoothR, baryCentersR, nbGraphR, nbSimWeightsR, segPixelListsR);
-	cv::Mat &disp = SegmentLabelToDisparityMap(numRows, numCols, nL, uL, baryCentersL, segPixelListsL);
 	printf("Evaluating *** DispDataL ***\n");
-	EvaluateDisparity(rootFolder, disp, 0.5f);
+	cv::Mat &disp = SegmentLabelToDisparityMap(numRows, numCols, nL, uL, baryCentersL, segPixelListsL);
+	evalParams.n = &nL;
+	evalParams.u = &uL;
+	EvaluateDisparity(rootFolder, disp, 0.5f, &evalParams, "OnMouseTestARAP");
 
 
 	for (float theta = 0.1f; theta <= 2.f; theta += 0.2f) {
@@ -619,7 +637,10 @@ static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 
 		printf("Evaluating *** DispDataL ***\n");
 		cv::Mat &dispDataL = SegmentLabelToDisparityMap(numRows, numCols, nL, uL, baryCentersL, segPixelListsL);
-		EvaluateDisparity(rootFolder, dispDataL, 0.5f);
+		evalParams.confidenceImg = NULL;
+		evalParams.n = &nL;
+		evalParams.u = &uL;
+		EvaluateDisparity(rootFolder, dispDataL, 0.5f, &evalParams, "OnMouseTestARAP");
 
 		// Post process data map robustness
 		ARAPPostProcess(numRows, numCols, nL, nR, uL, uR, gDataL, gDataR, baryCentersL, baryCentersR,
@@ -634,7 +655,10 @@ static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 
 		printf("Evaluating *** DispSmoothL ***\n");
 		cv::Mat &dispSmoothL = SegmentLabelToDisparityMap(numRows, numCols, mL, vL, baryCentersL, segPixelListsL);
-		EvaluateDisparity(rootFolder, dispSmoothL, 0.5f);
+		evalParams.confidenceImg = NULL;
+		evalParams.n = &mL;
+		evalParams.u = &vL;
+		EvaluateDisparity(rootFolder, dispSmoothL, 0.5f, &evalParams, "OnMouseTestARAP");
 
 		// Post process smooth map for robustness
 		ARAPPostProcess(numRows, numCols, mL, mR, vL, vR, gSmoothL, gSmoothR, baryCentersL, baryCentersR,

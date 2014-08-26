@@ -423,7 +423,7 @@ void PatchMatchOnTrianglePostProcess(int numRows, int numCols,
 
 	std::vector<std::pair<std::string, void*>> auxParams;
 	auxParams.push_back(std::pair<std::string, void*>("triImg", &confidenceImgL));
-	EvaluateDisparity(ROOTFOLDER, dispL, 0.5f, auxParams);
+	EvaluateDisparity(ROOTFOLDER, dispL, 0.5f/*, auxParams*/);
 }
 
 
@@ -529,15 +529,15 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 	cv::Mat dispR = TriangleLabelToDisparityMap(numRows, numCols, slantedPlanesR, triPixelListsR);
 	std::vector<std::pair<std::string, void*>> auxParams;
 	auxParams.push_back(std::pair<std::string, void*>("triImg", &triImgL));
-	EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
+	EvaluateDisparity(rootFolder, dispL, 0.5f/*, auxParams*/);
 
 	/*PatchMatchOnPixelPostProcess(slantedPlanesL, slantedPlanesR, triPixelListsL, triPixelListsR,
 	imL, imR, dispL, dispR);*/
 	PatchMatchOnTrianglePostProcess(numRows, numCols, slantedPlanesL, slantedPlanesR,
 		baryCentersL, baryCentersR, nbIndicesL, nbIndicesR, triPixelListsL, triPixelListsR, dispL, dispR);
 
-	return;
-	EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
+	
+	EvaluateDisparity(rootFolder, dispL, 0.5f/*, auxParams*/);
 
 	std::vector<std::vector<SlantedPlane>> candidateLabels;
 	std::vector<std::vector<float>> unaryCosts;

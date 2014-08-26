@@ -97,13 +97,17 @@ void OnMousePatchMatchOnPixels(int event, int x, int y, int flags, void *param)
 	OnMouseEvaluateDisparityDefaultDrawing(event, x, y, flags, (void*)((void**)param + 1), tmpCanvas);
 
 	if (event == CV_EVENT_LBUTTONDOWN) {
-		std::vector<std::pair<std::string, void*>> &auxParams
-			= *(std::vector<std::pair<std::string, void*>>*)((void**)param)[0];
+		
+		struct PatchMatchOnPixelEvalParams {
+			MCImg<SlantedPlane> *slantedPlanes;
+			cv::Mat *bestCosts;
+			PatchMatchOnPixelEvalParams() : slantedPlanes(NULL), bestCosts(NULL) {}
+		};
 
-		ASSERT(auxParams[0].first == "slantedPlanesL")
-		ASSERT(auxParams[1].first == "bestCostsL")
-		MCImg<SlantedPlane> &slantedPlanesL = *(MCImg<SlantedPlane>*)auxParams[0].second;
-		cv::Mat &bestCostsL					= *(cv::Mat*)auxParams[1].second;
+		PatchMatchOnPixelEvalParams *evalParams = (PatchMatchOnPixelEvalParams*)((void**)param)[0];
+		ASSERT(evalParams->slantedPlanes && evalParams->bestCosts);
+		MCImg<SlantedPlane> &slantedPlanesL = *evalParams->slantedPlanes;
+		cv::Mat &bestCostsL					= *evalParams->bestCosts;
 
 		int numRows = bestCostsL.rows, numCols = bestCostsL.cols;
 		y %= numRows;
@@ -132,15 +136,19 @@ void OnMouseLoopyBPOnGridGraph(int event, int x, int y, int flags, void *param)
 	OnMouseEvaluateDisparityDefaultDrawing(event, x, y, flags, (void*)((void**)param + 1), tmpCanvas);
 
 	if (event == CV_EVENT_LBUTTONDOWN) {
-		std::vector<std::pair<std::string, void*>> &auxParams
-			= *(std::vector<std::pair<std::string, void*>>*)((void**)param)[0];
 
-		ASSERT(auxParams[0].first == "allMessages")
-		ASSERT(auxParams[1].first == "allBeliefs")
-		ASSERT(auxParams[2].first == "unaryCosts")
-		MCImg<float> &allMessages = *(MCImg<float>*)auxParams[0].second;
-		MCImg<float> &allBeliefs  = *(MCImg<float>*)auxParams[1].second;
-		MCImg<float> &unaryCost   = *(MCImg<float>*)auxParams[2].second;
+		struct LoopyBPOnGridGraphEvalParams {
+			MCImg<float> *allMessages;
+			MCImg<float> *allBeliefs;
+			MCImg<float> *unaryCosts;
+			LoopyBPOnGridGraphEvalParams() : allMessages(0), allBeliefs(0), unaryCosts(0) {}
+		};
+		LoopyBPOnGridGraphEvalParams *evalParams = (LoopyBPOnGridGraphEvalParams*)((void**)param)[0];
+		ASSERT(evalParams->allMessages && evalParams->allBeliefs && evalParams->unaryCosts);
+		MCImg<float> &allMessages = *(MCImg<float>*)evalParams->allMessages;
+		MCImg<float> &allBeliefs  = *(MCImg<float>*)evalParams->allBeliefs;
+		MCImg<float> &unaryCost   = *(MCImg<float>*)evalParams->unaryCosts;
+
 
 		int numRows = allBeliefs.h, numCols = allBeliefs.w, numDisps = allBeliefs.n;
 		y %= numRows; x %= numCols;
@@ -206,21 +214,32 @@ void OnMouseTestSelfSimilarityPropagation(int event, int x, int y, int flags, vo
 
 void OnMouseMeshStereoOnFactorGraph(int event, int x, int y, int flags, void *param)
 {
-	std::vector<std::pair<std::string, void*>> &auxParams
-		= *(std::vector<std::pair<std::string, void*>>*)((void**)param)[0];
 	cv::Mat &imL			= *(cv::Mat*)((void**)param)[3 + 1];
 	int numDisps			= *(int*)((void**)param)[8 + 1];
 	int maxDisp				= numDisps - 1;
 	std::string workingDir	= *(std::string*)((void**)param)[10 + 1];
 
-	ASSERT(auxParams[0].first == "splitMap")
-	ASSERT(auxParams[1].first == "MeshStereoBPOnFGObject")
 
-	cv::Mat									&splitMap = *(cv::Mat*)auxParams[0].second;
-	MeshStereoBPOnFG						&bp = *(MeshStereoBPOnFG*)auxParams[1].second;
-	std::vector<cv::Point2f>				&vertexCoords = bp.vertexCoords;
-	std::vector<std::vector<int>>			&triVertexInds = bp.triVertexInds;
-	std::vector<std::vector<SlantedPlane>>	&triVertexBestLabels = bp.triVertexBestLabels;
+	//std::vector<std::pair<std::string, void*>> &auxParams
+	//	= *(std::vector<std::pair<std::string, void*>>*)((void**)param)[0];
+	//ASSERT(auxParams[0].first == "splitMap")
+	//ASSERT(auxParams[1].first == "MeshStereoBPOnFGObject")
+	//cv::Mat									&splitMap = *(cv::Mat*)auxParams[0].second;
+	//MeshStereoBPOnFG						&bp = *(MeshStereoBPOnFG*)auxParams[1].second;
+
+	struct MeshStereoBPOnFGEvalParams {
+		cv::Mat *triImg;
+		cv::Mat *splitMap;
+		MeshStereoBPOnFG *obj;
+		MeshStereoBPOnFGEvalParams() : triImg(0), splitMap(0), obj(0) {}
+	};
+	MeshStereoBPOnFGEvalParams *evalParams = (MeshStereoBPOnFGEvalParams*)((void**)param)[0];
+	ASSERT(evalParams->splitMap && evalParams->obj);
+	cv::Mat									&splitMap				= *evalParams->splitMap;
+	MeshStereoBPOnFG						&bp						= *evalParams->obj;
+	std::vector<cv::Point2f>				&vertexCoords			= bp.vertexCoords;
+	std::vector<std::vector<int>>			&triVertexInds			= bp.triVertexInds;
+	std::vector<std::vector<SlantedPlane>>	&triVertexBestLabels	= bp.triVertexBestLabels;
 
 
 	if (event == CV_EVENT_LBUTTONDOWN)
@@ -292,8 +311,13 @@ void OnMouseMeshStereoOnFactorGraph(int event, int x, int y, int flags, void *pa
 		return;
 	}
 
-
+	
 	cv::Mat tmpCanvas = (*(cv::Mat*)((void**)param)[1]).clone();
+	if (evalParams->triImg) {
+		int numRows = tmpCanvas.rows / 2;
+		int numCols = tmpCanvas.cols / 3;
+		evalParams->triImg->copyTo(tmpCanvas(cv::Rect(0, numRows, numCols, numRows)));
+	}
 	OnMouseEvaluateDisparityDefaultDrawing(event, x, y, flags, (void*)((void**)param + 1), tmpCanvas);
 	cv::imshow("OnMouseMeshStereoOnFactorGraph", tmpCanvas);
 }
@@ -349,5 +373,56 @@ void OnMouseVisualizeSimilarityWegiths(int event, int x, int y, int flags, void 
 
 void OnMouseTestARAP(int event, int x, int y, int flags, void *param)
 {
+	struct ARAPEvalParams {
+		int numRows, numCols;
+		cv::Mat *labelMap;
+		cv::Mat *confidenceImg;
+		std::vector<cv::Point2f> *baryCenters;
+		std::vector<cv::Vec3f> *n;
+		std::vector<float> *u;
+		std::vector<std::vector<int>> *nbGraph;
+		std::vector<std::vector<cv::Point2i>> *segPixelLists;
+		ARAPEvalParams() : numRows(0), numCols(0), labelMap(0), baryCenters(0),
+			n(0), u(0), nbGraph(0), segPixelLists(0), confidenceImg(0) {}
+	};
 
+	cv::Mat tmpCanvas = (*(cv::Mat*)((void**)param)[1]).clone();
+	OnMouseEvaluateDisparityDefaultDrawing(event, x, y, flags, (void*)((void**)param + 1), tmpCanvas);
+
+	ARAPEvalParams *evalParams = (ARAPEvalParams*)((void**)param)[0];
+	int numRows = evalParams->numRows;
+	int numCols = evalParams->numCols;
+	if (evalParams->confidenceImg) {
+		evalParams->confidenceImg->copyTo(tmpCanvas(cv::Rect(0, numRows, numCols, numRows)));
+	}
+
+	if (event == CV_EVENT_LBUTTONDOWN)
+	{
+		if (!evalParams->labelMap || !evalParams->u || !evalParams->n || !evalParams->baryCenters) {
+			printf("(!evalParams->labelMap || !evalParams->u || !evalParams->n || !evalParams->baryCenters) is false!\n");
+			return;
+		}
+		y %= evalParams->numRows;
+		x %= evalParams->numCols;
+
+		std::vector<cv::Point2f> &baryCenters	= *evalParams->baryCenters;
+		std::vector<cv::Vec3f>   &n				= *evalParams->n;
+		std::vector<float>		 &u				= *evalParams->u;
+		cv::Mat					 &labelMap		= *evalParams->labelMap;
+
+		int id = labelMap.at<int>(y, x);
+		SlantedPlane sp = SlantedPlane::ConstructFromNormalDepthAndCoord(
+			n[id][0], n[id][1], n[id][2], u[id], baryCenters[id].y, baryCenters[id].x);
+
+		char textBuf[1024];
+		sprintf(textBuf, "( a,  b,  c) = (% 11.6f, % 11.6f, % 11.6f)", sp.a, sp.b, sp.c);
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2f(20, 50), CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+		sprintf(textBuf, "(nx, ny, nz) = (% 11.6f, % 11.6f, % 11.6f)", sp.nx, sp.ny, sp.nz);
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2f(20, 80), CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+		/*sprintf(textBuf, "bestCost(%3d, %3d) = %f", y, x, bestCostsL.at<float>(y, x));
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2f(20, 110), CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);*/
+	}
+
+
+	cv::imshow("OnMouseTestARAP", tmpCanvas);
 }

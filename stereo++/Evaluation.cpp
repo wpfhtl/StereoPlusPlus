@@ -57,12 +57,16 @@ void RegisterMouseCallbacks(std::string mouseCallbackName, void *callbackParams)
 		cv::setMouseCallback(mouseCallbackName, OnMouseMeshStereoOnFactorGraph, callbackParams);
 		return;
 	}
+	if (mouseCallbackName == "OnMouseTestARAP") {
+		void OnMouseTestARAP(int event, int x, int y, int flags, void *param);
+		cv::setMouseCallback(mouseCallbackName, OnMouseTestARAP, callbackParams);
+		return;
+	}
 	ASSERT(0)
 }
 
 void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f, 
-	std::vector<std::pair<std::string, void*>> auxParams = std::vector<std::pair<std::string, void*>>(),
-	std::string mouseCallbackName = "OnMouseEvaluateDisparity")
+	void *auxParamsPtr = NULL, std::string mouseCallbackName = "OnMouseEvaluateDisparity")
 {
 	// Step 1 - Load images, parepare parameters
 	std::string folderPrefix = "D:/data/stereo/";
@@ -148,17 +152,17 @@ void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f,
 	cv::hconcat(bottomRow, imR, bottomRow);
 	cv::vconcat(topRow, bottomRow, canvas);
 
-	cv::Mat childWindowBL = canvas(cv::Rect(0, numRows, numCols, numRows));
+	/*cv::Mat childWindowBL = canvas(cv::Rect(0, numRows, numCols, numRows));
 	if (!auxParams.empty()) {
 		if (auxParams[0].first == "triImg" || auxParams[0].first == "segImg") {
 			(*(cv::Mat*)auxParams[0].second).copyTo(childWindowBL);
 			auxParams.erase(auxParams.begin());
 		}
-	}
+	}*/
 
 	// step 4 - Invoke mouse callbacks
 	void *callbackParams[] = { 
-		&auxParams,
+		auxParamsPtr,
 		&canvas, &dispL, &GT, &imL, &imR,
 		&badRateOnNonocc, &badRateOnAll, &badRateOnDisc, 
 		&numDisps, &visualizeScale, &workingDir
