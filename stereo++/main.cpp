@@ -42,7 +42,12 @@ std::string runId;
 
 int main(int argc, char** argv)
 {
-	//srand(12345);
+
+	//extern std::string ROOTFOLDER;
+	//cv::Mat dispLSL = cv::imread("d:/data/stereo/" + ROOTFOLDER + "/GC+LSL.png", CV_LOAD_IMAGE_GRAYSCALE);
+	//dispLSL.convertTo(dispLSL, CV_32FC1, 0.25f);
+	//EvaluateDisparity(ROOTFOLDER, dispLSL, 0.5f);
+	//return 0;
 
 
 	extern int PROGRAM_ENTRY;
@@ -94,6 +99,12 @@ int main(int argc, char** argv)
 		PrintProgramEntryHeader("TestARAP", 8);
 		void TestARAP();
 		TestARAP();
+		break;
+
+	case 9:
+		PrintProgramEntryHeader("TestARAP", 9);
+		void TestSemiGlobalMatching();
+		TestSemiGlobalMatching();
 		break;
 	}
 	

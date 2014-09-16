@@ -84,10 +84,12 @@ void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f,
 
 
 	// Step 2 - Statistics
-	cv::Mat absDiff, badPixelMap; 
-	GT.convertTo(GT, CV_32FC1, 1.f / visualizeScale);
-	cv::absdiff(dispL, GT, absDiff);
-	cv::compare(absDiff, cv::Mat::ones(GT.size(), CV_32FC1), badPixelMap, CV_CMP_GT);
+	cv::Mat absDiff, badPixelMap, dispTmp; 
+	GT.convertTo(GT, CV_32FC1);
+	dispL.convertTo(dispTmp, CV_8UC1, visualizeScale);
+	dispTmp.convertTo(dispTmp, CV_32FC1);
+	cv::absdiff(dispTmp, GT, absDiff);
+	cv::compare(absDiff, eps * visualizeScale * cv::Mat::ones(GT.size(), CV_32FC1), badPixelMap, cv::CMP_GT);
 
 	cv::Mat badOnNonocc(GT.size(), CV_8UC3, cv::Scalar(255, 255, 255));
 	cv::Mat badOnAll   (GT.size(), CV_8UC3, cv::Scalar(255, 255, 255));
@@ -143,8 +145,9 @@ void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f,
 	cv::Mat canvas, topRow, bottomRow, gtImg, dispImg;
 	dispL.convertTo(dispImg, CV_8UC1, visualizeScale);
 	cv::cvtColor(dispImg, dispImg, CV_GRAY2BGR);
-	GT.convertTo(gtImg, CV_8UC1, visualizeScale);
+	GT.convertTo(gtImg, CV_8UC1);
 	cv::cvtColor(gtImg, gtImg, CV_GRAY2BGR);
+	GT.convertTo(GT, CV_32FC1, 1.f / visualizeScale);
 
 	cv::hconcat(gtImg, dispImg, topRow);
 	cv::hconcat(topRow, imL, topRow);

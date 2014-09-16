@@ -39,6 +39,8 @@ enum CostAggregationType	{ GRID, TOP50 };
 enum MatchingCostType		{ ADGRADIENT, ADCENSUS };
 CostAggregationType			gCostAggregationType;
 MatchingCostType			gMatchingCostType;
+int							INTERP_ONLINE;
+
 
 float						TAU1;
 float						TAU2;
@@ -70,11 +72,15 @@ float						POSTALIGN_TAU1;
 float						POSTALIGN_TAU2;
 
 float						ARAP_LAMBDA;
+float						ARAP_SIGMA;
+float						ARAP_THETASCALE;
+float						ARAP_THETAOFFSET;
+int							ARAP_MAX_ITERS;
 int							SEGMENT_LEN;
 
 
 
-
+cv::Mat gImRgbL, gImRgbR, gImGradL, gImGradR;
 
 struct GlobalParamsInitializer
 {
@@ -97,7 +103,12 @@ GlobalParamsInitializer::GlobalParamsInitializer()
 		}
 		sscanf(lineBuf, "%s%s", keyStr, valStr);
 
-		if (std::string(keyStr) == "TAU1") {
+
+		if (std::string(keyStr) == "INTERP_ONLINE") {
+			sscanf(valStr, "%d", &INTERP_ONLINE);
+			printf("%20s = %d\n", "INTERP_ONLINE", INTERP_ONLINE);
+		}
+		else if (std::string(keyStr) == "TAU1") {
 			sscanf(valStr, "%f", &TAU1);
 			printf("%20s = %f\n", "TAU1", TAU1);
 		}
@@ -194,6 +205,22 @@ GlobalParamsInitializer::GlobalParamsInitializer()
 		else if (std::string(keyStr) == "ARAP_LAMBDA") {
 			sscanf(valStr, "%f", &ARAP_LAMBDA);
 			printf("%20s = %f\n", "ARAP_LAMBDA", ARAP_LAMBDA);
+		}
+		else if (std::string(keyStr) == "ARAP_SIGMA") {
+			sscanf(valStr, "%f", &ARAP_SIGMA);
+			printf("%20s = %f\n", "ARAP_SIGMA", ARAP_SIGMA);
+		}		
+		else if (std::string(keyStr) == "ARAP_THETASCALE") {
+			sscanf(valStr, "%f", &ARAP_THETASCALE);
+			printf("%20s = %f\n", "ARAP_THETASCALE", ARAP_THETASCALE);
+		}
+		else if (std::string(keyStr) == "ARAP_THETAOFFSET") {
+			sscanf(valStr, "%f", &ARAP_THETAOFFSET);
+			printf("%20s = %f\n", "ARAP_THETAOFFSET", ARAP_THETAOFFSET);
+		}
+		else if (std::string(keyStr) == "ARAP_MAX_ITERS") {
+			sscanf(valStr, "%d", &ARAP_MAX_ITERS);
+			printf("%20s = %d\n", "ARAP_MAX_ITERS", ARAP_MAX_ITERS);
 		}
 		else if (std::string(keyStr) == "SEGMENT_LEN") {
 			sscanf(valStr, "%d", &SEGMENT_LEN);

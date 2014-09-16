@@ -121,11 +121,39 @@ cv::Mat ComputeGradientImage(cv::Mat &img)
 	return gradientImg;
 }
 
+cv::Mat ComputeGradxyImage(cv::Mat& img)
+{
+	int numRows = img.rows, numCols = img.cols;
+	int sobelScale = 1, sobelDelta = 0;
+	cv::Mat gray, grad_x, grad_y;
+
+	cv::cvtColor(img, gray, CV_BGR2GRAY);
+	cv::Sobel(gray, grad_x, CV_32F, 1, 0, 3, sobelScale, sobelDelta, cv::BORDER_DEFAULT);
+	cv::Sobel(gray, grad_y, CV_32F, 0, 1, 3, sobelScale, sobelDelta, cv::BORDER_DEFAULT);
+	grad_x = grad_x / 8.f;
+	grad_y = grad_y / 8.f;
+
+	cv::Mat grad(numRows, numCols, CV_32FC2);
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			grad.at<cv::Vec2f>(y, x)[0] = grad_x.at<float>(y, x);
+			grad.at<cv::Vec2f>(y, x)[1] = grad_y.at<float>(y, x);
+		}
+	}
+
+	return grad / 255.f;
+}
+
 int L1Dist(const cv::Vec3b &a, const cv::Vec3b &b)
 {
 	return std::abs((int)a[0] - (int)b[0])
 		 + std::abs((int)a[1] - (int)b[1])
 		 + std::abs((int)a[2] - (int)b[2]);
+}
+
+float L1Dist(const cv::Vec2f &a, const cv::Vec2f &b)
+{
+	return std::abs(a[0] - b[0]) + std::abs(a[1] - b[1]);
 }
 
 float L1Dist(const cv::Vec3f &a, const cv::Vec3f &b)
@@ -208,6 +236,7 @@ MCImg<float> ComputeAdCensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps,
 
 }
 
+#if 1
 MCImg<float> ComputeAdGradientCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign, float granularity)
 {
 	//#define COLORGRADALPHA	0.05f
@@ -264,6 +293,68 @@ MCImg<float> ComputeAdGradientCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisp
 
 	return dsiL;
 }
+#else
+MCImg<float> ComputeAdGradientCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign, float granularity)
+{
+	const float	ALPHA		= 0.1;
+	const float	TAU_COLOR	= 10;
+	const float	TAU_GRAD	= 2;
+
+	extern float COLORGRADALPHA;
+	extern float COLORMAXDIFF;
+	extern float GRADMAXDIFF;
+
+	int numRows = imL.rows, numCols = imL.cols;
+	int numLevels = numDisps / granularity;
+	MCImg<float> dsiL(numRows, numCols, numLevels);
+
+	cv::Mat gradientL = ComputeGradxyImage(imL);
+	cv::Mat gradientR = ComputeGradxyImage(imR);
+	cv::Mat bgrL;	imL.convertTo(bgrL, CV_32FC3, 1.f / 255);
+	cv::Mat bgrR;	imR.convertTo(bgrR, CV_32FC3, 1.f / 255);
+
+	#pragma omp parallel for
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			for (int level = 0; level < numLevels; level++) {
+
+				float d = level * granularity;
+				float xm = x + sign * d;
+
+				// FIXME: has implicitly assumed "ndisps <= numCols", it's not safe.
+				if (xm < 0)				xm += numCols;
+				if (xm > numCols - 1)	xm -= numCols;
+
+				float xmL, xmR, wL, wR;
+				xmL = (int)(xm);
+				xmR = (int)(xm + 0.99);
+				wL = xmR - xm;
+				wR = 1.f - wL;
+
+				cv::Vec3f &colorL	= bgrL.at<cv::Vec3f>(y, x);
+				cv::Vec3f &colorRmL = bgrR.at<cv::Vec3f>(y, xmL);
+				cv::Vec3f &colorRmR = bgrR.at<cv::Vec3f>(y, xmR);
+				cv::Vec2f &gradL	= gradientL.at<cv::Vec2f>(y, x);
+				cv::Vec2f &gradRmL	= gradientR.at<cv::Vec2f>(y, xmL);
+				cv::Vec2f &gradRmR	= gradientR.at<cv::Vec2f>(y, xmR);
+				cv::Vec3f colorR	= wL * colorRmL + wR * colorRmR;
+				cv::Vec2f gradR		= wL * gradRmL  + wR * gradRmR;
+
+
+				//float costColor = std::min(TAU_COLOR, L1Dist(colorL, colorR));
+				//float costGrad  = std::min(TAU_GRAD,  L1Dist(gradL, gradR));
+				//dsiL.get(y, x)[level] = ALPHA * costColor + (1 - ALPHA) * costGrad;
+
+				float costColor = std::min(COLORMAXDIFF, L1Dist(colorL, colorR));
+				float costGrad  = std::min(GRADMAXDIFF, L1Dist(gradL, gradR));
+				dsiL.get(y, x)[level] = COLORGRADALPHA * costColor + (1 - COLORGRADALPHA) * costGrad;
+			}
+		}
+	}
+
+	return dsiL;
+}
+#endif
 
 cv::Mat WinnerTakesAll(MCImg<float> &dsi, float granularity)
 {
@@ -285,8 +376,72 @@ cv::Mat WinnerTakesAll(MCImg<float> &dsi, float granularity)
 	return disp;
 }
 
+template<typename T> static inline T BilinearInterp(cv::Mat &im, int y, float x)
+{
+	int numRows = im.rows, numCols = im.cols;
+	ASSERT(0 <= y && y < numRows);
+	
+	x = std::max(0.f, std::min(numCols - 1.f, x));
+	int xL = floor(x);
+	int xR = ceil(x);
+	float wL = std::abs(x - xR);
+	float wR = 1.f - wL;
+	return wL * im.at<T>(y, xL) + wR * im.at<T>(y, xR);
+}
+
 float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int sign)
 {
+	extern int INTERP_ONLINE;
+
+	if (INTERP_ONLINE) {
+		extern float SIMILARITY_GAMMA;
+		extern cv::Mat gImRgbL, gImRgbR, gImGradL, gImGradR;
+		int numRows = gImRgbL.rows, numCols = gImRgbL.cols;
+		extern float COLORGRADALPHA;
+		extern float COLORMAXDIFF;
+		extern float GRADMAXDIFF;
+
+		// The color and gradient feature are in range [0, 1]
+		cv::Mat &imRgbL		= (sign == -1 ? gImRgbL : gImRgbR);
+		cv::Mat &imRgbR		= (sign == -1 ? gImRgbR : gImRgbL);
+		cv::Mat &imGradL	= (sign == -1 ? gImGradL : gImGradR);
+		cv::Mat &imGradR	= (sign == -1 ? gImGradR : gImGradL);
+
+		cv::Vec3f c = imRgbL.at<cv::Vec3f>(yc, xc);
+		float wsum = 0.f;
+		float totalCost = 0.f;
+
+		for (int y = yc - PATCHRADIUS, id = 0; y <= yc + PATCHRADIUS; y += 1) {
+			for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += 1, id++) {
+				if (InBound(y, x, numRows, numCols)) {
+
+					float w = exp(-255.f * L1Dist(c, imRgbL.at<cv::Vec3f>(y, x)) / SIMILARITY_GAMMA);
+					float d = slantedPlane.ToDisparity(y, x);
+					float xm = x + sign * d;
+
+					cv::Vec3f colorL = imRgbL.at<cv::Vec3f>(y, x);
+					cv::Vec3f colorR = BilinearInterp<cv::Vec3f>(imRgbR, y, xm);
+					cv::Vec4f gradL  = imGradL.at<cv::Vec4f>(y, x);
+					cv::Vec4f gradR  = BilinearInterp<cv::Vec4f>(imGradR, y, xm);
+					
+					float costColor = std::min(COLORMAXDIFF, L1Dist(colorL, colorR));
+					float costGrad  = std::min(GRADMAXDIFF,  L1Dist(gradL, gradR));
+					float cost = COLORGRADALPHA * costColor + (1 - COLORGRADALPHA) * costGrad;
+
+					totalCost += w * cost;
+					wsum += w;
+				}
+			}
+		}
+
+		if (wsum <= 1.1f) {
+			return 1e5f;
+		}
+		return totalCost / wsum;
+	}
+
+
+
 	MCImg<float> &dsi			= (sign == -1 ? gDsiL : gDsiR);
 	MCImg<float> &simWeights	= (sign == -1 ? gSimWeightsL : gSimWeightsR);
 	MCImg<SimVector> &simVecs	= (sign == -1 ? gSimVecsL : gSimVecsR);
@@ -326,6 +481,15 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 
 	//return totalCost / numPixelsInBound;
 	return totalCost / accWeight;
+}
+
+void InitGlobalColorGradientFeatures(cv::Mat &imL, cv::Mat &imR)
+{
+	extern cv::Mat gImRgbL, gImRgbR, gImGradL, gImGradR;
+	imL.convertTo(gImRgbL, CV_32FC3, 1.f / 255.f);
+	imR.convertTo(gImRgbR, CV_32FC3, 1.f / 255.f);
+	gImGradL = ComputeGradientImage(imL);
+	gImGradR = ComputeGradientImage(imR);
 }
 
 void InitGlobalDsiAndSimWeights(cv::Mat &imL, cv::Mat &imR, int numDisps)

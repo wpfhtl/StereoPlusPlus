@@ -197,8 +197,10 @@
     <ClCompile Include="poly2tri\sweep\sweep_context.cc" />
     <ClCompile Include="PostProcess.cpp" />
     <ClCompile Include="SelfSimilarityPropagation.cpp" />
+    <ClCompile Include="SGM.cpp" />
     <ClCompile Include="SLIC\SLIC.cpp" />
     <ClCompile Include="Splitting.cpp" />
+    <ClCompile Include="StereoFlow.cpp" />
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="Triangulate2D.cpp" />
   </ItemGroup>

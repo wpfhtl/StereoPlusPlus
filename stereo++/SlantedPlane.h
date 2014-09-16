@@ -99,13 +99,25 @@ struct SlantedPlane {
 		/* Usually, the nz value of the ground plane are between 0.65 - 0.85
 		 * the nx are ofen neglectable, ny are always negative due to ground 
 		 * Plane's slanted direction */
-		float minNz = 0.7;
-		float maxNz = 0.85;
-		float nz = Randf(minNz, maxNz);
-		float nx = Randf(-0.05, +0.05);
-		float ny = -sqrt(1 - nx*nx - nz*nz);
-		float d = curDisp + zRadius * Randf(-1, 1);
+		//float minNz = 0.7;
+		//float maxNz = 0.85;
+		//float nz = Randf(minNz, maxNz);
+		//float nx = Randf(-0.05, +0.05);
+		//float ny = -sqrt(1 - nx*nx - nz*nz);
+		//float d = curDisp + zRadius * Randf(-1, 1);
+		//return ConstructFromNormalDepthAndCoord(nx, ny, nz, d, y, x);
+		const float NORMALCOMPMAX = 0.8f;
+		float nx = Randf(-0.5, 0.5) * NORMALCOMPMAX * 0.25f;
+		float ny = Randf(-0.5, 0.5) * NORMALCOMPMAX * 0.25f;
+		int sign = (ny < 0 ? -1 : +1);
+		ny = sign * NORMALCOMPMAX * 0.75f + ny;
+		float nfactor = fmax(sqrt(nx * nx + ny * ny), 1.0f);
+		nx /= (nfactor + 1e-3f);
+		ny /= (nfactor + 1e-3f);
+		float nz = sqrt(1.f - nx * nx - ny * ny);
+		float d = Randf(0.f, 60.f);
 		return ConstructFromNormalDepthAndCoord(nx, ny, nz, d, y, x);
+
 	}
 	float ToDisparity(int y, int x)
 	{

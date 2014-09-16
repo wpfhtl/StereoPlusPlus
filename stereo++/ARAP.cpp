@@ -34,6 +34,23 @@ struct ARAPEvalParams {
 
 static ARAPEvalParams evalParams;
 
+template<typename T> static inline T mix(T a, T b, float alpha) { return a + (b - a) * alpha; }
+template<typename T> static inline T mix(T a, T b, double alpha) { return a + (b - a) * alpha; }
+
+template<typename T> static inline T clamp(T v, T min, T max) { return (v < min) ? min : (v > max) ? max : v; }
+
+template<typename T> static inline T smoothstep(T edge0, T edge1, T x)
+{
+	T t = clamp<T>((x - edge0) / (edge1 - edge0), 0, 1);
+	return t * t * (((T)3) - ((T)2) * t);
+}
+
+template<typename T> static inline T smoothstep(T x)
+{
+	T t = clamp<T>(x, 0, 1);
+	return t * t * (((T)3) - ((T)2) * t);
+}
+
 static struct SortByRowCoord {
 	bool operator ()(const std::pair<cv::Point2f, int> &a, const std::pair<cv::Point2f, int> &b) const {
 		return a.first.y < b.first.y;
@@ -272,7 +289,10 @@ static void ComputeSegmentSimilarityWeights(cv::Mat &img, std::vector<std::vecto
 		nbSimWeights[id].resize(nbGraph[id].size());
 		for (int k = 0; k < nbGraph[id].size(); k++) {
 			int nbId = nbGraph[id][k];
-			nbSimWeights[id][k] = exp(-L1Dist(meanColors[id], meanColors[nbId]) / 30.f);
+			float w = exp(-L1Dist(meanColors[id], meanColors[nbId]) / 30.f);
+			nbSimWeights[id][k] = w;
+			if (w < 0.3) { w = 0.f; }
+			//printf("nbSimWeights: %f\n", w); 
 		}
 	}
 }
@@ -334,8 +354,13 @@ static float ConstrainedPatchMatchCost(float yc, float xc, SlantedPlane &newGues
 	cv::Vec3f nL(newGuess.nx, newGuess.ny, newGuess.nz);
 	float uL = newGuess.ToDisparity(yc, xc) / maxDisp;
 	vL /= maxDisp;
-	float smoothCost = (nL - mL).dot(nL - mL);// +(uL - vL) * (uL - vL);
-	return dataCost + 0.5 * theta * smoothCost;
+	//float smoothCost = (nL - mL).dot(nL - mL);// +(uL - vL) * (uL - vL);
+	float nx = nL[0], ny = nL[1], mx = mL[0], my = mL[1];
+	float smoothCost = (nx - mx) * (nx - mx) + (ny - my) * (ny - my);
+
+	extern float ARAP_LAMBDA;
+	extern float ARAP_SIGMA;
+	return ARAP_LAMBDA * dataCost + 0.5 * ARAP_SIGMA * theta * smoothCost;
 }
 
 static void ImproveGuess(float y, float x, SlantedPlane &oldGuess, SlantedPlane &newGuess, 
@@ -364,25 +389,29 @@ static void PropagateAndRandomSearch(int id, int sign, float maxDisp, float thet
 	}
 
 	// Random search
+
+	if (1 && (y > 330)) {
+		// Special treament for ground planes
+		for (int retry = 0; retry < 10; retry++) {
+			float curDisp = slantedPlanes[id].ToDisparity(y, x);
+			SlantedPlane newGuess = SlantedPlane::ConstructFromGroundPlaneProposal(y, x, curDisp, /*zRadius*/0);
+			ImproveGuess(y, x, slantedPlanes[id], newGuess, bestCosts[id],
+				mL[id], vL[id], maxDisp, theta * gSmooth, sign);
+		}
+	}
+
 	float zRadius = maxDisp / 2.f;
 	float nRadius = 1.f;
 	while (zRadius >= 0.1f) {
 		SlantedPlane newGuess = SlantedPlane::ConstructFromRandomPertube(slantedPlanes[id], y, x, nRadius, zRadius);
 		ImproveGuess(y, x, slantedPlanes[id], newGuess, bestCosts[id], 
 			mL[id], vL[id], maxDisp, theta * gSmooth, sign);
-
-		if (1 && (y > 330)) {
-			// Special treament for ground planes
-			for (int retry = 0; retry < 5; retry++) {
-				float curDisp = slantedPlanes[id].ToDisparity(y, x);
-				SlantedPlane newGuess = SlantedPlane::ConstructFromGroundPlaneProposal(y, x, curDisp, zRadius);
-				ImproveGuess(y, x, slantedPlanes[id], newGuess, bestCosts[id],
-					mL[id], vL[id], maxDisp, theta * gSmooth, sign);
-			}
-		}
+	
 		zRadius /= 2.f;
 		nRadius /= 2.f;
 	}
+
+	
 }
 
 static void ConstrainedPatchMatchOnSegments(int sign, float theta, float maxDisp, int maxIters, bool doRandInit,
@@ -453,7 +482,7 @@ static void SolveARAPSmoothness(float theta, std::vector<float> &confidence,
 	//	 b_i  = \theta_i * n_i
 	// N is the number of segments, w_ij is the similarity weights between neighboring segments.
 	printf("SolveARAPSmoothness...\n");
-	extern float ARAP_LAMBDA;
+	extern float ARAP_SIGMA;
 
 	int numSegs = nbGraph.size();
 	int numNonZeroEntries = 0;
@@ -461,7 +490,11 @@ static void SolveARAPSmoothness(float theta, std::vector<float> &confidence,
 		numNonZeroEntries += 1 + nbGraph[id].size();
 	}
 
-	std::vector<float> &g = confidence;
+	std::vector<float> g = confidence;
+	// Give the data's confidence a 0.1 offset
+	//for (int i = 0; i < g.size(); i++) {
+	//	g[i] += 0.1f;
+	//}
 	std::vector<Eigen::Triplet<float>> entries;
 	entries.reserve(numNonZeroEntries);
 	for (int id = 0; id < numSegs; id++) {
@@ -472,10 +505,10 @@ static void SolveARAPSmoothness(float theta, std::vector<float> &confidence,
 		for (int k = 0; k < nbInds.size(); k++) {
 			int i = id;
 			int j = nbInds[k];
-			entries.push_back(Eigen::Triplet<float>(i, j, -ARAP_LAMBDA * nbWeights[k]));
+			entries.push_back(Eigen::Triplet<float>(i, j, -nbWeights[k]));
 			wsum += nbWeights[k];
 		}
-		entries.push_back(Eigen::Triplet<float>(id, id, theta * g[id] + ARAP_LAMBDA * wsum));
+		entries.push_back(Eigen::Triplet<float>(id, id, ARAP_SIGMA * theta * g[id] + wsum));
 	}
 
 
@@ -483,10 +516,10 @@ static void SolveARAPSmoothness(float theta, std::vector<float> &confidence,
 	// In defense: I think no matter what storing order is used, the accessing is still (y, x).
 	Eigen::MatrixXf b(numSegs, 4);
 	for (int id = 0; id < numSegs; id++) {
-		b.coeffRef(id, 0) = theta * g[id] * n[id][0];
-		b.coeffRef(id, 1) = theta * g[id] * n[id][1];
-		b.coeffRef(id, 2) = theta * g[id] * n[id][2];
-		b.coeffRef(id, 3) = theta * g[id] * u[id];
+		b.coeffRef(id, 0) = ARAP_SIGMA * theta * g[id] * n[id][0];
+		b.coeffRef(id, 1) = ARAP_SIGMA * theta * g[id] * n[id][1];
+		b.coeffRef(id, 2) = ARAP_SIGMA * theta * g[id] * n[id][2];
+		b.coeffRef(id, 3) = ARAP_SIGMA * theta * g[id] * u[id];
 	}
 
 	Eigen::SparseMatrix<float> A(numSegs, numSegs);
@@ -569,12 +602,19 @@ static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	int numRows = imL.rows, numCols = imL.cols;
 	int numDisps, maxDisp, visualizeScale;
 	SetupStereoParameters(rootFolder, numDisps, maxDisp, visualizeScale);
-	InitGlobalDsiAndSimWeights(imL, imR, numDisps);
+	extern int INTERP_ONLINE;
+	if (INTERP_ONLINE) {
+		InitGlobalColorGradientFeatures(imL, imR);
+	}
+	else {
+		InitGlobalDsiAndSimWeights(imL, imR, numDisps);
+	}
 
 	// Segmentize/Triangulize both views
 	cv::Mat labelMapL, labelMapR, contourImgL, contourImgR;
 	extern int SEGMENT_LEN;
-	int numPreferedRegions = (numRows * numCols) / (SEGMENT_LEN * SEGMENT_LEN);
+	//int numPreferedRegions = (numRows * numCols) / (SEGMENT_LEN * SEGMENT_LEN);
+	int numPreferedRegions = (numCols / 8 + 1) * (numRows / 8 + 1);
 	float compactness = 20.f;
 	int numSegsL = SLICSegmentation(imL, numPreferedRegions, compactness, labelMapL, contourImgL);
 	int numSegsR = SLICSegmentation(imR, numPreferedRegions, compactness, labelMapR, contourImgR);
@@ -593,8 +633,8 @@ static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	ComputeSegmentSimilarityWeights(imR, nbGraphR, segPixelListsR, nbSimWeightsR);
 	
 	//srand(2466700234);
-	ModifyGlobalSimilarityWeights(-1, labelMapL, baryCentersL, segPixelListsL);
-	ModifyGlobalSimilarityWeights(+1, labelMapR, baryCentersR, segPixelListsR);
+	//ModifyGlobalSimilarityWeights(-1, labelMapL, baryCentersL, segPixelListsL);
+	//ModifyGlobalSimilarityWeights(+1, labelMapR, baryCentersR, segPixelListsR);
 	//VisualizeSimilarityWegiths(segImgL, gSimWeightsL);
 
 
@@ -614,10 +654,10 @@ static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	evalParams.segPixelLists	= &segPixelListsL;
 
 	// Optimization starts
-	ConstrainedPatchMatchOnSegments(-1, 0.f, maxDisp, 4, true,
+	ConstrainedPatchMatchOnSegments(-1, 0.f, maxDisp, 8, true,
 		nL, uL, mL, vL, gSmoothL, baryCentersL, nbGraphL, nbSimWeightsL, segPixelListsL);
-	ConstrainedPatchMatchOnSegments(+1, 0.f, maxDisp, 4, true,
-		nR, uR, mR, vR, gSmoothR, baryCentersR, nbGraphR, nbSimWeightsR, segPixelListsR);
+	//ConstrainedPatchMatchOnSegments(+1, 0.f, maxDisp, 4, true,
+	//	nR, uR, mR, vR, gSmoothR, baryCentersR, nbGraphR, nbSimWeightsR, segPixelListsR);
 	printf("Evaluating *** DispDataL ***\n");
 	cv::Mat &disp = SegmentLabelToDisparityMap(numRows, numCols, nL, uL, baryCentersL, segPixelListsL);
 	evalParams.n = &nL;
@@ -625,9 +665,15 @@ static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	EvaluateDisparity(rootFolder, disp, 0.5f, &evalParams, "OnMouseTestARAP");
 
 
-	for (float theta = 0.1f; theta <= 2.f; theta += 0.2f) {
-		printf("theta = %f\n", theta);
-		 
+	extern int		ARAP_MAX_ITERS;
+	extern float	ARAP_THETASCALE;
+	extern float	ARAP_THETAOFFSET;
+
+	for (int iter = 0; iter < ARAP_MAX_ITERS; iter++) {
+
+		float theta = smoothstep<float>(((iter) / ((float)ARAP_MAX_ITERS))) * 1.0f;
+		printf("\n\n=========== theta = %f ===========\n", theta); 
+		
 		//////////////////////////////////////////////////////////////////////////////////////////
 		// Optimize E_DATA
 		ConstrainedPatchMatchOnSegments(-1, theta, maxDisp, 2, false,
@@ -650,8 +696,8 @@ static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 
 		//////////////////////////////////////////////////////////////////////////////////////////
 		// Optimize E_SMOOTH
-		SolveARAPSmoothness(theta, gDataL, nbGraphL, nbSimWeightsL, nL, uL, mL, vL);
-		SolveARAPSmoothness(theta, gDataR, nbGraphR, nbSimWeightsR, nR, uR, mR, vR);
+		SolveARAPSmoothness(theta + 0.1f, gDataL, nbGraphL, nbSimWeightsL, nL, uL, mL, vL);
+		SolveARAPSmoothness(theta + 0.1f, gDataR, nbGraphR, nbSimWeightsR, nR, uR, mR, vR);
 
 		printf("Evaluating *** DispSmoothL ***\n");
 		cv::Mat &dispSmoothL = SegmentLabelToDisparityMap(numRows, numCols, mL, vL, baryCentersL, segPixelListsL);

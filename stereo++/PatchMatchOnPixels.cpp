@@ -221,7 +221,7 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 		PatchMatchOnPixelEvalParams evalParams;
 		evalParams.slantedPlanes	= &slantedPlanesL;
 		evalParams.bestCosts		= &bestCostsL;
-		EvaluateDisparity(rootFolder, dispL, 0.5f, &evalParams, "OnMousePatchMatchOnPixels");
+		//EvaluateDisparity(rootFolder, dispL, 0.5f, &evalParams, "OnMousePatchMatchOnPixels");
 	}
 
 
@@ -234,13 +234,26 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 
 	slantedPlanesL.SaveToBinaryFile("d:/" + rootFolder + "SlantedPlanesL.bin");
 	slantedPlanesR.SaveToBinaryFile("d:/" + rootFolder + "SlantedPlanesR.bin");
+
+	cv::Mat dispImgL(numRows, numCols, CV_8UC3);
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			unsigned char d = visualizeScale * dispL.at<float>(y, x) + 0.5f;
+			dispImgL.at<cv::Vec3b>(y, x) = cv::Vec3b(d, d, d);
+		}
+	}
+
+	cv::imwrite("d:/data/stereo/" + rootFolder + "/PatchMatchOnPixel_dispL.png", dispImgL);
+	cv::imwrite("d:/data/stereo/" + rootFolder + "/PatchMatchOnPixel_dispR.png", visualizeScale * dispR);
 }
 
 void TestPatchMatchOnPixels()
 {
-	cv::Mat imL = cv::imread("D:/data/stereo/teddy/im2.png");
-	cv::Mat imR = cv::imread("D:/data/stereo/teddy/im6.png");
+	extern std::string ROOTFOLDER;
+	std::string rootFolder = ROOTFOLDER;
+	cv::Mat imL = cv::imread("D:/data/stereo/" + rootFolder + "/im2.png");
+	cv::Mat imR = cv::imread("D:/data/stereo/" + rootFolder + "/im6.png");
+	
 	cv::Mat dispL, dispR;
-
-	RunPatchMatchOnPixels("teddy", imL, imR, dispL, dispR);
+	RunPatchMatchOnPixels(ROOTFOLDER, imL, imR, dispL, dispR);
 }

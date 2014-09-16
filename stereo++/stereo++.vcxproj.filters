@@ -171,5 +171,11 @@
     <ClCompile Include="ARAP.cpp">
       <Filter>LocalMethods</Filter>
     </ClCompile>
+    <ClCompile Include="SGM.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="StereoFlow.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
