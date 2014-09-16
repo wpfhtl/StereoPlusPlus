@@ -149,7 +149,7 @@ static void InitTPSByGrid(int numPreferedSegments, cv::Mat &img, cv::Mat &labelM
 	meanColorCosts		= std::vector<cv::Vec3f>(M * N, cv::Vec3f(0, 0, 0));
 	meanPositionCosts	= std::vector<cv::Point2f>(M * N, cv::Point2f(0, 0));
 
-	cv::Mat labelMap(numRows, numCols, CV_32SC1);
+	labelMap.create(numRows, numCols, CV_32SC1);
 	for (int y = 0; y < numRows; y++) {
 		for (int x = 0; x < numCols; x++) {
 			int i = std::min(y / segLen, M - 1);
@@ -185,15 +185,15 @@ static void InitTPSByGrid(int numPreferedSegments, cv::Mat &img, cv::Mat &labelM
 
 static float LocalBoundaryLengthCost(cv::Point2i p, int label, cv::Mat &labelMap)
 {
-	const cv::Point2i dirOffsets[] = {
-		cv::Point2i(-1, 0), cv::Point2i(+1, 0),
-		cv::Point2i(0, -1), cv::Point2i(0, +1)
-	};
-	for (int r = 0; r < 4; r++) {
-		cv::Point2i q = p + dirOffsets[r];
-		if (InBound(q, labelMap.rows, labelMap.cols)
-			&& 
+	int dist = 0;
+	for (int y = p.y - 1; y <= p.y + 1; y++) {
+		for (int x = p.x - 1; x <= p.x + 1; x++) {
+			if (InBound(y, x, labelMap.rows, labelMap.cols)) {
+				dist += (labelMap.at<int>(y, x) != labelMap.at<int>(p.y, p.x));
+			}
+		}
 	}
+	return dist;
 }
 
 static void TopologyPreservingSegmentation(cv::Mat &img, int numPreferedSegments, 
@@ -201,10 +201,14 @@ static void TopologyPreservingSegmentation(cv::Mat &img, int numPreferedSegments
 	std::vector<cv::Vec3f> &meanColors, std::vector<cv::Point2f> &meanPositions,
 	std::vector<cv::Vec3f> &meanColorCosts, std::vector<cv::Point2f> &meanPositionCosts)
 {
+	const float LAMBDA_POS = 500;
+	const float LAMBDA_BOU = 1000;
+
 	const cv::Point2i dirOffsets[] = {
 		cv::Point2i(-1, 0), cv::Point2i(+1, 0),
 		cv::Point2i(0, -1), cv::Point2i(0, +1)
 	};
+
 	int numRows = img.rows, numCols = img.cols;
 
 	InitTPSByGrid(numPreferedSegments, img, labelMap, segSizes, 
@@ -235,9 +239,10 @@ static void TopologyPreservingSegmentation(cv::Mat &img, int numPreferedSegments
 		cv::Vec3f pColor = cv::Vec3f(img.at<cv::Vec3b>(p.y, p.x));
 
 		// AL stands for appearence and location
-		float oldALCostI = cv::sum(meanColorCosts[idI]) + LAMBDA_POS * meanPositionCosts[idI];
-		float newALCostI = RunningMeanSquareCost(pColor, meanColors[idI], meanColorCosts[idI], segSizes[idI], -1)
-			+ LAMBDA_POS * RunningMeanSquareCost(cv::Point2f(p), meanPositions[idI], meanPositionCosts[idI], segSizes[idI], -1);
+		float oldALCostI = meanColorCosts[idI].dot(cv::Vec3f(1, 1, 1))
+			+ LAMBDA_POS * (meanPositionCosts[idI].dot(cv::Point2f(1, 1)));
+		float newALCostI = cv::Vec3f(1, 1, 1).dot(RunningMeanSquareCost(pColor, meanColors[idI], meanColorCosts[idI], segSizes[idI], -1))
+			+ LAMBDA_POS * cv::Point2f(1, 1).dot(RunningMeanSquareCost(cv::Point2f(p), meanPositions[idI], meanPositionCosts[idI], segSizes[idI], -1));
 		float oldBoundaryCost = LocalBoundaryLengthCost(p, idI, labelMap);
 
 		std::set<int> candidateLabelSet;
@@ -255,11 +260,10 @@ static void TopologyPreservingSegmentation(cv::Mat &img, int numPreferedSegments
 				continue;
 			}
 			
-			float oldALCostJ = meanColorCosts[idJ] + LAMBDA_POS * meanPositionCosts[idJ];
-			float newALCostJ = RunningMeanSquareCost<cv::Vec3f>(pColor, meanColors[idJ], meanColorCosts[idJ], segSizes[idJ], +1)
-				+ LAMBDA_POS * RunningMeanSquareCost<cv::Point2f>(cv::Point2f(p), meanPositions[idJ], meanPositionCosts[idJ], segSizes[idJ], +1);
-			/*float newALCostJ = ExpandALCost(p, cv::Vec3f(img.at<cv::Vec3b>(p.y, p.x)), segSizes[idJ],
-				meanColors[idJ], meanPositions[idJ], meanColorCosts[idJ], meanPositionCosts[idJ]);*/
+			float oldALCostJ = meanColorCosts[idJ].dot(cv::Vec3f(1, 1, 1)) 
+				+ LAMBDA_POS * (meanPositionCosts[idJ].dot(cv::Point2f(1, 1)));
+			float newALCostJ = cv::Vec3f(1, 1, 1).dot(RunningMeanSquareCost(pColor, meanColors[idJ], meanColorCosts[idJ], segSizes[idJ], +1))
+				+ LAMBDA_POS * cv::Point2f(1, 1).dot(RunningMeanSquareCost(cv::Point2f(p), meanPositions[idJ], meanPositionCosts[idJ], segSizes[idJ], +1));
 			float newBoundaryCost = LocalBoundaryLengthCost(p, idJ, labelMap);
 			float newCost = newALCostI + newALCostJ + LAMBDA_BOU * newBoundaryCost
 						  - oldALCostI - oldALCostJ - LAMBDA_BOU * oldBoundaryCost;
@@ -274,10 +278,10 @@ static void TopologyPreservingSegmentation(cv::Mat &img, int numPreferedSegments
 		if (bestId != idI) {
 			// update values.
 			int idJ = bestId;
-			meanColorCosts[idI]		= RunningMeanSquareCost<cv::Vec3f>(pColor, meanColors[idI], meanColorCosts[idI], segSizes[idI], -1);
-			meanColorCosts[idJ]		= RunningMeanSquareCost<cv::Vec3f>(pColor, meanColors[idJ], meanColorCosts[idJ], segSizes[idJ], +1);
-			meanPositionCosts[idI]	= RunningMeanSquareCost<cv::Point2f>(cv::Point2f(p), meanPositions[idI], meanPositionCosts[idI], segSizes[idI], -1);
-			meanPositionCosts[idJ]	= RunningMeanSquareCost<cv::Point2f>(cv::Point2f(p), meanPositions[idJ], meanPositionCosts[idJ], segSizes[idJ], +1);
+			meanColorCosts[idI]		= RunningMeanSquareCost(pColor, meanColors[idI], meanColorCosts[idI], segSizes[idI], -1);
+			meanColorCosts[idJ]		= RunningMeanSquareCost(pColor, meanColors[idJ], meanColorCosts[idJ], segSizes[idJ], +1);
+			meanPositionCosts[idI]	= RunningMeanSquareCost(cv::Point2f(p), meanPositions[idI], meanPositionCosts[idI], segSizes[idI], -1);
+			meanPositionCosts[idJ]	= RunningMeanSquareCost(cv::Point2f(p), meanPositions[idJ], meanPositionCosts[idJ], segSizes[idJ], +1);
 			meanColors[idI]		= (meanColors[idI] * segSizes[idI] - pColor) / (segSizes[idI] - 1.f);
 			meanColors[idJ]		= (meanColors[idJ] * segSizes[idJ] + pColor) / (segSizes[idJ] + 1.f);
 			meanPositions[idI]	= (meanPositions[idI] * segSizes[idI] - cv::Point2f(p)) * (1.f / (segSizes[idI] - 1));
@@ -298,43 +302,53 @@ static void TopologyPreservingSegmentation(cv::Mat &img, int numPreferedSegments
 	}
 }
 
+static void VisualizeSegmentation(cv::Mat &img, cv::Mat &labelMap)
+{
+	int numRows = img.rows, numCols = img.cols;
+	double minVal, maxVal;
+	cv::minMaxLoc(labelMap, &minVal, &maxVal);
+	int numLabels = maxVal + 1;
+	std::vector<cv::Vec3b> colors(numLabels);
+	for (int i = 0; i < numLabels; i++) {
+		colors[i][0] = rand() % 256;
+		colors[i][1] = rand() % 256;
+		colors[i][2] = rand() % 256;
+	}
+
+	cv::Mat segImg(numRows, numCols, CV_8UC3);
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			int id = labelMap.at<int>(y, x);
+			segImg.at<cv::Vec3b>(y, x) = colors[id];
+		}
+	}
+
+	cv::Mat canvas;
+	cv::hconcat(img, segImg, canvas);
+	cv::imshow("segmentation", canvas);
+	cv::waitKey(0);
+}
+
 void RunSPSS(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR)
 {
 	int numRows = imL.rows, numCols = imL.cols;
 	int numDisps, maxDisp, visualizeScale;
 	SetupStereoParameters(rootFolder, numDisps, maxDisp, visualizeScale);
 
-	// Step 1 - Initialize segmentation to regular grid
 	int numPreferedRegions = 500;
-	int segLen = std::sqrt((numRows * numCols * 1.f) / numPreferedRegions) + 0.5f;
-	int M = numRows / segLen, N = numCols / segLen;
-	std::vector<cv::Vec3f>		meanColors(M * N);
-	std::vector<cv::Point2f>	meanPositions(M * N);
-	std::vector<int>			segSizes(M * N);
-
-	cv::Mat labelMap(numRows, numCols, CV_32SC1);
-
-	for (int i = 0; i < M; i++) {
-		for (int j = 0; j < N; j++) {
-			int id = i * N + j;
-			int UU = i * segLen;
-			int LL = j * segLen;
-			int DD = (i == M - 1 ? numRows - 1 : (i + 1) * segLen - 1);
-			int RR = (j == N - 1 ? numCols - 1 : (j + 1) * segLen - 1);
-
-
-			for (int y = UU; y <= DD; y++) {
-				for (int x = LL; x <= RR; x++) {
-					labelMap.at<int>(y, x) = id;
-
-				}
-			}
-		}
-	}
+	cv::Mat labelMap;
+	std::vector<int> segSizes;
+	std::vector<cv::Vec3f> meanColors, meanColorCosts;
+	std::vector<cv::Point2f> meanPositions, meanPositionCosts;
 
 
 	// Step 2 - Topology Preserving Segmentation (TPS)
-	TopologyPreservingSegmentation(imL, labelMap, meanColors, meanPositions);
+	TopologyPreservingSegmentation(imL, numPreferedRegions, labelMap, segSizes,
+		meanColors, meanPositions, meanColorCosts, meanPositionCosts);
+
+	// Visualize segmentation.
+	VisualizeSegmentation(imL, labelMap);
+
 
 	// Step 3 - Alternated Optimization
 

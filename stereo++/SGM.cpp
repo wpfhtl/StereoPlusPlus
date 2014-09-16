@@ -199,7 +199,7 @@ void TestSemiGlobalMatching()
 	cv::Point2f A(1, 2), B(3, 4);
 	cv::Point2f C;
 	cv::multiply(a, b, c);
-	std::cout << cv::sum(A) << "\n";
+	std::cout << A.dot(cv::Point2f(2, 3)) << "\n";
 	return;
 
 
