@@ -131,7 +131,8 @@ cv::Mat QuadraticInterpDisp(cv::Mat &disp, MCImg<float> &dsi, float granularity)
 
 // Implement the algorithm Consistent Semi Global Matching (CSGM)
 // PAMI'08 Stereo Processing by Semiglobal Matching and Mutual Information
-void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR)
+void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
+	cv::Mat &dispL, cv::Mat &dispR, cv::Mat &validPixelMapL, cv::Mat &validPixelMapR)
 {
 	const float GRANULARITY = 1.f;
 	int numDisps, maxDisp, visualizeScale;
@@ -146,7 +147,7 @@ void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL,
 		int y = rand() % numRows;
 		int x = rand() % numCols;
 		int d = rand() % numDisps;
-		printf("%f\n", dsiL.get(y, x)[d]);
+		//printf("%f\n", dsiL.get(y, x)[d]);
 	}
 
 
@@ -165,10 +166,10 @@ void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL,
 
 
 	// Step 4 - Consistency Check
-	cv::Mat validPixelMapL = CrossCheck(dispL, dispR, -1, 0.5f);
-	//cv::Mat validPixelMapR = CrossCheck(dispR, dispL, +1);
-	cv::imshow("consitency map", validPixelMapL);
-	cv::waitKey(0);
+	validPixelMapL = CrossCheck(dispL, dispR, -1, 0.5f);
+	validPixelMapR = CrossCheck(dispR, dispL, +1, 0.5f);
+	//cv::imshow("consitency map", validPixelMapL);
+	//cv::waitKey(0);
 
 	// Step 5 - Remove of peaks (optional).
 	//          This step segments the disparity iamge by allowing disparities inside segment
@@ -189,7 +190,7 @@ void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL,
 	// Step 8 - Another final consistency checked will be great before you feed the result
 	//          into Joint Stereo Flow.
 
-	EvaluateDisparity(rootFolder, dispL, 0.5f);
+	//EvaluateDisparity(rootFolder, dispL, 0.5f);
 }
 
 void TestSemiGlobalMatching()
@@ -208,5 +209,6 @@ void TestSemiGlobalMatching()
 	cv::Mat imR = cv::imread("D:/data/stereo/" + ROOTFOLDER + "/im6.png");
 
 	cv::Mat dispL, dispR;
-	RunCSGM(ROOTFOLDER, imL, imR, dispL, dispR);
+	cv::Mat validMapL, validMapR;
+	RunCSGM(ROOTFOLDER, imL, imR, dispL, dispR, validMapL, validMapR);
 }

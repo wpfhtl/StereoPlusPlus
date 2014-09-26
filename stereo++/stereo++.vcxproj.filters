@@ -177,5 +177,8 @@
     <ClCompile Include="StereoFlow.cpp">
       <Filter>LocalMethods</Filter>
     </ClCompile>
+    <ClCompile Include="MySLIC.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

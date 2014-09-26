@@ -187,6 +187,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MatchingCost.cpp" />
     <ClCompile Include="MouseCallbacks.cpp" />
+    <ClCompile Include="MySLIC.cpp" />
     <ClCompile Include="PatchMatchOnPixels.cpp" />
     <ClCompile Include="PatchMatchOnTriangles.cpp" />
     <ClCompile Include="Ply.cpp" />

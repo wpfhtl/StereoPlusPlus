@@ -7,21 +7,21 @@
 #include "StereoAPI.h"
 
 #ifdef _DEBUG
-#pragma comment(lib, "opencv_core244d.lib")
-#pragma comment(lib, "opencv_highgui244d.lib")
-#pragma comment(lib, "opencv_imgproc244d.lib")
-#pragma comment(lib, "opencv_features2d244d.lib")
-#pragma comment(lib, "opencv_calib3d244d.lib")
-#pragma comment(lib, "opencv_video244d.lib")
-#pragma comment(lib, "opencv_flann244d.lib")
+#pragma comment(lib, "opencv_core248d.lib")
+#pragma comment(lib, "opencv_highgui248d.lib")
+#pragma comment(lib, "opencv_imgproc248d.lib")
+#pragma comment(lib, "opencv_features2d248d.lib")
+#pragma comment(lib, "opencv_calib3d248d.lib")
+#pragma comment(lib, "opencv_video248d.lib")
+#pragma comment(lib, "opencv_flann248d.lib")
 #else
-#pragma comment(lib, "opencv_core244.lib")
-#pragma comment(lib, "opencv_highgui244.lib")
-#pragma comment(lib, "opencv_imgproc244.lib")
-#pragma comment(lib, "opencv_features2d244.lib")
-#pragma comment(lib, "opencv_calib3d244.lib")
-#pragma comment(lib, "opencv_video244.lib")
-#pragma comment(lib, "opencv_flann244.lib")
+#pragma comment(lib, "opencv_core248.lib")
+#pragma comment(lib, "opencv_highgui248.lib")
+#pragma comment(lib, "opencv_imgproc248.lib")
+#pragma comment(lib, "opencv_features2d248.lib")
+#pragma comment(lib, "opencv_calib3d248.lib")
+#pragma comment(lib, "opencv_video248.lib")
+#pragma comment(lib, "opencv_flann248.lib")
 #endif
 
 
@@ -111,6 +111,11 @@ int main(int argc, char** argv)
 		PrintProgramEntryHeader("TestStereoFlow", 10);
 		void TestStereoFlow();
 		TestStereoFlow();
+		break;
+
+	case 11:
+		void TestMySlicSegmentation();
+		TestMySlicSegmentation();
 		break;
 	}
 	
