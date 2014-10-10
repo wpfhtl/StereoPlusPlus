@@ -8,7 +8,11 @@
 
 void SetupStereoParameters(std::string rootFolder, int &numDisps, int &maxDisp, int &visualizeScale)
 {
-	if (rootFolder == "tsukuba") {
+	if (rootFolder == "KITTI") {
+		numDisps = 220;
+		visualizeScale = 1;
+	}
+	else if (rootFolder == "tsukuba") {
 		numDisps = 16;
 		visualizeScale = 16;
 	}
@@ -65,9 +69,85 @@ void RegisterMouseCallbacks(std::string mouseCallbackName, void *callbackParams)
 	ASSERT(0)
 }
 
+static void EvaluateDisparityKITTI(cv::Mat &disp)
+{
+	extern std::string kittiTestCaseId;
+	cv::Mat &GT_NOC = cv::imread("D:/data/KITTI/training/disp_noc/" + kittiTestCaseId + ".png", CV_LOAD_IMAGE_UNCHANGED);
+	cv::Mat &GT_ALL = cv::imread("D:/data/KITTI/training/disp_occ/" + kittiTestCaseId + ".png", CV_LOAD_IMAGE_UNCHANGED);
+
+	GT_NOC.convertTo(GT_NOC, CV_32FC1, 1.f / 256.f);
+	GT_ALL.convertTo(GT_ALL, CV_32FC1, 1.f / 256.f);
+	//GT_NOC.convertTo(GT_NOC, CV_32FC1);
+	//GT_ALL.convertTo(GT_ALL, CV_32FC1);
+	//GT_NOC /= 256.0;
+	//GT_ALL /= 256.0;
+
+
+	printf("%d\n%d\n%d\n%d\n", disp.channels(), GT_NOC.channels(), disp.type(), GT_NOC.type());
+	cv::Mat absDiffNoc, absDiffAll;
+	cv::absdiff(disp, GT_NOC, absDiffNoc);
+	cv::absdiff(disp, GT_ALL, absDiffAll);
+
+	std::vector<float> errRatesNoc(6, 0), errRatesAll(6, 0);
+	int numGtPixelsNoc = 0, numGtPixelsAll = 0;
+	int numRows = disp.rows, numCols = disp.cols;
+
+
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			// NONOCC
+			if (GT_NOC.at<float>(y, x) > 0.f) {
+				numGtPixelsNoc++;
+				for (int e = 0; e <= 5; e++) {
+					if (absDiffNoc.at<float>(y, x) > e) {
+						errRatesNoc[e] += 1.f;
+					}
+				}
+			}
+			// ALL
+			if (GT_ALL.at<float>(y, x) > 0.f) {
+				numGtPixelsAll++;
+				for (int e = 0; e <= 5; e++) {
+					if (absDiffAll.at<float>(y, x) > e) {
+						errRatesAll[e] += 1.f;
+					}
+				}
+			}
+		}
+	}
+
+	for (int e = 0; e <= 5; e++) {
+		errRatesNoc[e] /= numGtPixelsNoc;
+		errRatesAll[e] /= numGtPixelsAll;
+		errRatesNoc[e] *= 100;
+		errRatesAll[e] *= 100;
+	}
+
+	printf("        %6s %6s %6s %6s\n", "2px", "3px", "4px", "5px");
+	printf("errNOC  %6.2f %6.2f %6.2f %6.2f\n",
+		errRatesNoc[2], errRatesNoc[3], errRatesNoc[4], errRatesNoc[5]);
+	printf("errALL  %6.2f %6.2f %6.2f %6.2f\n",
+		errRatesAll[2], errRatesAll[3], errRatesAll[4], errRatesAll[5]);
+
+	cv::Mat disp16bitDetph;
+	disp.convertTo(disp16bitDetph, CV_16UC1, 256);
+	cv::imwrite("D:/code/rSGM/bin/Release/mydisp.png", disp16bitDetph);
+
+	cv::Mat cmpImg;
+	cv::vconcat(disp, GT_ALL, cmpImg);
+	cmpImg.convertTo(cmpImg, CV_8UC1, 3.0);
+	cv::imshow("cmpImg", cmpImg);
+	cv::waitKey(0);
+}
+
 void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f, 
 	void *auxParamsPtr = NULL, std::string mouseCallbackName = "OnMouseEvaluateDisparity")
 {
+	if (rootFolder == "KITTI") {
+		EvaluateDisparityKITTI(dispL);
+		return;
+	}
+
 	// Step 1 - Load images, parepare parameters
 	std::string folderPrefix = "D:/data/stereo/";
 	std::string workingDir = folderPrefix + rootFolder;

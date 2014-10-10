@@ -21,7 +21,7 @@ bool InBound(int y, int x, int numRows, int numCols);
 
 bool InBound(cv::Point &p, int numRows, int numCols);
 
-cv::Mat ComputeCensusImage(cv::Mat &img);
+cv::Mat ComputeCensusImage(cv::Mat &img, int vpad = 3, int hpad = 4);
 
 cv::Mat ComputeGradientImage(cv::Mat &img);
 
@@ -32,6 +32,8 @@ float L1Dist(const cv::Vec3f &a, const cv::Vec3f &b);
 float L1Dist(const cv::Vec4f &a, const cv::Vec4f &b);
 
 int HammingDist(const long long x, const long long y);
+
+MCImg<float> Compute9x7CensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign, float granularity);
 
 MCImg<float> ComputeAdCensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign, float granularity);
 

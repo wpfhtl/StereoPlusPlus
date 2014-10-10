@@ -114,8 +114,15 @@ int main(int argc, char** argv)
 		break;
 
 	case 11:
+		PrintProgramEntryHeader("TestMySlicSegmentation", 11);
 		void TestMySlicSegmentation();
 		TestMySlicSegmentation();
+		break;
+
+	case 12:
+		PrintProgramEntryHeader("TestSemiGlobalMatching", 12);
+		void TestSemiGlobalMatching();
+		TestSemiGlobalMatching();
 		break;
 	}
 	

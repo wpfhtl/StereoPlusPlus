@@ -467,10 +467,12 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 	Triangulate2DImage(imR, vertexCoordsR, triVertexIndsR);
 	cv::Mat triImgL = DrawTriangleImage(numRows, numCols, vertexCoordsL, triVertexIndsL);
 
+
 	std::vector<cv::Point2f> baryCentersL, baryCentersR;
 	std::vector<std::vector<int>> nbIndicesL, nbIndicesR;
 	ConstructNeighboringTriangleGraph(numRows, numCols, vertexCoordsL, triVertexIndsL, baryCentersL, nbIndicesL);
 	ConstructNeighboringTriangleGraph(numRows, numCols, vertexCoordsR, triVertexIndsR, baryCentersR, nbIndicesR);
+
 
 	std::vector<std::vector<cv::Point2i>> triPixelListsL, triPixelListsR;
 	DeterminePixelOwnership(numRows, numCols, vertexCoordsL, triVertexIndsL, triPixelListsL);
@@ -520,6 +522,7 @@ void RunPatchMatchOnTriangles(std::string rootFolder, cv::Mat &imL, cv::Mat &imR
 		////auxParams.push_back(std::pair<std::string, void*>("slantedPlanesL", &slantedPlanesL));
 		//EvaluateDisparity(rootFolder, dispL, 0.5f, auxParams);
 
+		printf("printf something...\n");
 		std::reverse(idListL.begin(), idListL.end());
 		std::reverse(idListR.begin(), idListR.end());
 	}

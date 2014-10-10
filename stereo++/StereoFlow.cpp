@@ -11,12 +11,12 @@
 #include "StereoAPI.h"
 #include "ReleaseAssert.h"
 
-static const int HINGE		= 0;
-static const int COPLANAR	= 1;
-static const int LEFTOCC	= 2;
-static const int RIGHTOCC	= 3;
+//static const int HINGE		= 0;
+//static const int COPLANAR	= 1;
+//static const int LEFTOCC	= 2;
+//static const int RIGHTOCC	= 3;
 
-//static enum {HINGE, COPLANAR, LEFTOCC, RIGHTOCC};
+static enum {HINGE, COPLANAR, LEFTOCC, RIGHTOCC};
 
 
 static bool IsBoundaryPixel(cv::Point2i &p, cv::Mat &labelMap)
@@ -1272,6 +1272,7 @@ void RunSPSS(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
 	const int maxInnerIters = 10;
 	for (int outerIters = 0; outerIters < maxOuterIters; outerIters++) {
 
+
 		// Step 3.1 - Update segmentation and outlier labels by ETPS
 		ExtendeTPS(imL, dispSgmL, validMapL, labelMapL, occMap, segRelationMat, boundarySizes, segSizes,
 			abc, meanColors, meanPositions, meanColorCosts, meanPositionCosts);
@@ -1283,7 +1284,6 @@ void RunSPSS(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
 		PrepareSegmentValidPixelLists(segSizes, labelMapL, validMapL, boundarySizes, 
 			segPixelLists, segValidPixelLists, segBoundaryPixelLists, adjGraph);
 		
-
 		for (int innerIters = 0; innerIters < maxInnerIters; innerIters++) {
 			// Step 3.2 - Update boudary labeling by brute force enumeration.
 			UpdateBoundaryLabeling(segRelationMat, boundarySizes, labelMapL, abc, segSizes, adjGraph);

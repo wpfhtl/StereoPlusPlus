@@ -10,9 +10,10 @@
 
 #include "StereoAPI.h"
 #include "ReleaseAssert.h"
+#include "Timer.h"
 
 
-MCImg<float> SemiGlobalCostAggregation(MCImg<float> &dsi)
+MCImg<float> SemiGlobalCostAggregation(MCImg<float> &dsi, cv::Mat &img)
 {
 	// Only assume 1.0 granularity
 	int numRows = dsi.h, numCols = dsi.w, numDisps = dsi.n;
@@ -71,15 +72,35 @@ MCImg<float> SemiGlobalCostAggregation(MCImg<float> &dsi)
 			curLocations[id] = curLocations[id] + offset;
 		}
 
+		// for AdGradient features
+		//const float P1 = 0.03f;
+		//const float P2 = 0.06f;
 
-		const float P1 = 0.03f;
-		const float P2 = 0.06f;
+		//const float P1 = 28;
+		//const float P2min = 30;
+		//const float alpha = 0.3;
+		//const float gamma = 63;
+
+		const float P1 = 7;
+		const float P2min = 17;
+		const float alpha = 0.f;
+		const float gamma = 100;
+
+		cv::Mat gray;
+		cv::cvtColor(img, gray, CV_BGR2GRAY);
+		gray.convertTo(gray, CV_32FC1);
 
 		// Sweeping
-		for (int id = 0; id < curLocations.size(); id++) {
+		int numSweepingLines = curLocations.size();
+		#pragma omp parallel for
+		for (int id = 0; id < /*curLocations.size()*/numSweepingLines; id++) {
 			while (InBound(curLocations[id], numRows, numCols)) {
 				cv::Point2i pos = curLocations[id];
 				cv::Point2i lastPos = pos - offset;
+				float &I_cur  = gray.at<float>(pos.y, pos.x);
+				float &I_last = gray.at<float>(lastPos.y, lastPos.x);
+				float P2 = -alpha * std::abs(I_cur - I_last) + gamma;
+				P2 = std::max(P2, P2min);
 				float minCost = FLT_MAX;
 
 				for (int d = 0; d < numDisps; d++) {
@@ -100,6 +121,7 @@ MCImg<float> SemiGlobalCostAggregation(MCImg<float> &dsi)
 		}
 
 		// Update accumulated cost
+		#pragma omp parallel for
 		for (int i = 0; i < numRows * numCols * numDisps; i++) {
 			dsiAcc.data[i] += L.data[i];
 		}
@@ -134,13 +156,18 @@ cv::Mat QuadraticInterpDisp(cv::Mat &disp, MCImg<float> &dsi, float granularity)
 void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
 	cv::Mat &dispL, cv::Mat &dispR, cv::Mat &validPixelMapL, cv::Mat &validPixelMapR)
 {
+	bs::Timer::Tic("SGM");
+
 	const float GRANULARITY = 1.f;
 	int numDisps, maxDisp, visualizeScale;
 	SetupStereoParameters(rootFolder, numDisps, maxDisp, visualizeScale);
 
 	// Step 1 - Building Cost Volume
-	MCImg<float> dsiL = ComputeAdGradientCostVolume(imL, imR, numDisps, -1, GRANULARITY);
-	MCImg<float> dsiR = ComputeAdGradientCostVolume(imR, imL, numDisps, +1, GRANULARITY);
+	//MCImg<float> dsiL = ComputeAdGradientCostVolume(imL, imR, numDisps, -1, GRANULARITY);
+	//MCImg<float> dsiR = ComputeAdGradientCostVolume(imR, imL, numDisps, +1, GRANULARITY);
+	MCImg<float> dsiL = Compute9x7CensusCostVolume(imL, imR, numDisps, -1, 1.f);
+	//MCImg<float> dsiR = Compute9x7CensusCostVolume(imR, imL, numDisps, +1, 1.f);
+
 
 	int numRows = imL.rows, numCols = imL.cols;
 	for (int retry = 0; retry < 100; retry++) {
@@ -152,22 +179,22 @@ void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
 
 
 	// Step 2 - Aggregate cost volume at 8 different directions
-	MCImg<float> aggrDsiL = SemiGlobalCostAggregation(dsiL);
-	MCImg<float> aggrDsiR = SemiGlobalCostAggregation(dsiR);
+	MCImg<float> aggrDsiL = SemiGlobalCostAggregation(dsiL, imL);
+	//MCImg<float> aggrDsiR = SemiGlobalCostAggregation(dsiR, imR);
 
 
 	// Step 3 - Subpixel WTA using quadratic interpolation, followed by 3x3 median filtering
 	dispL = WinnerTakesAll(aggrDsiL, GRANULARITY);
-	dispR = WinnerTakesAll(aggrDsiR, GRANULARITY);
-	dispL = QuadraticInterpDisp(dispL, aggrDsiL, GRANULARITY);
-	dispR = QuadraticInterpDisp(dispR, aggrDsiR, GRANULARITY);
+	//dispR = WinnerTakesAll(aggrDsiR, GRANULARITY);
 	cv::medianBlur(dispL, dispL, 3);
-	cv::medianBlur(dispR, dispR, 3);
+	//cv::medianBlur(dispR, dispR, 3);
+	//dispL = QuadraticInterpDisp(dispL, aggrDsiL, GRANULARITY);
+	//dispR = QuadraticInterpDisp(dispR, aggrDsiR, GRANULARITY);
 
 
 	// Step 4 - Consistency Check
-	validPixelMapL = CrossCheck(dispL, dispR, -1, 0.5f);
-	validPixelMapR = CrossCheck(dispR, dispL, +1, 0.5f);
+	//validPixelMapL = CrossCheck(dispL, dispR, -1, 0.5f);
+	//validPixelMapR = CrossCheck(dispR, dispL, +1, 0.5f);
 	//cv::imshow("consitency map", validPixelMapL);
 	//cv::waitKey(0);
 
@@ -189,24 +216,42 @@ void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
 
 	// Step 8 - Another final consistency checked will be great before you feed the result
 	//          into Joint Stereo Flow.
-
-	//EvaluateDisparity(rootFolder, dispL, 0.5f);
+	bs::Timer::Toc();
+	EvaluateDisparity(rootFolder, dispL, 0.5f);
 }
+
+std::string kittiTestCaseId = "000000_10";
 
 void TestSemiGlobalMatching()
 {
-	cv::Vec3f a(1, 2, 3), b(1, 2, 4);
-	cv::Vec3f c = a.mul(b);
-	cv::Point2f A(1, 2), B(3, 4);
-	cv::Point2f C;
-	cv::multiply(a, b, c);
-	std::cout << A.dot(cv::Point2f(2, 3)) << "\n";
-	return;
-
-
+	cv::Mat imL, imR;
 	extern std::string ROOTFOLDER;
-	cv::Mat imL = cv::imread("D:/data/stereo/" + ROOTFOLDER + "/im2.png");
-	cv::Mat imR = cv::imread("D:/data/stereo/" + ROOTFOLDER + "/im6.png");
+	if (ROOTFOLDER == "KITTI") {
+		extern bool useKitti;
+		extern std::string kittiTestCaseId;
+		
+		imL = cv::imread("D:/data/KITTI/training/colored_0/" + kittiTestCaseId + ".png");
+		imR = cv::imread("D:/data/KITTI/training/colored_1/" + kittiTestCaseId + ".png");
+
+		//cv::Mat GT_NOC = cv::imread("D:/data/KITTI/training/disp_noc/" + kittiTestCaseId + ".png", CV_LOAD_IMAGE_UNCHANGED);
+		//cv::imshow("tmp", GT_NOC);
+		//cv::waitKey(0);
+		//GT_NOC.convertTo(GT_NOC, CV_32FC1, 1.f / 255.f);
+		//GT_NOC.convertTo(GT_NOC, CV_8UC1, 3);
+		//cv::imshow("tmp", GT_NOC);
+		//cv::waitKey(0);
+		//return;
+
+		//cv::Mat &disp = cv::imread("D:/code/rSGM/bin/Release/mydisp.png", CV_LOAD_IMAGE_UNCHANGED);
+		//disp.convertTo(disp, CV_32FC1, 1.f / 256.f);
+		//EvaluateDisparity(ROOTFOLDER, disp);
+		//return;
+	}
+	else {
+		imL = cv::imread("D:/data/stereo/" + ROOTFOLDER + "/im2.png");
+		imR = cv::imread("D:/data/stereo/" + ROOTFOLDER + "/im6.png");
+	}
+	
 
 	cv::Mat dispL, dispR;
 	cv::Mat validMapL, validMapR;

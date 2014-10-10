@@ -42,7 +42,7 @@ bool InBound(cv::Point &p, int numRows, int numCols)
 	return 0 <= p.y && p.y < numRows && 0 <= p.x && p.x < numCols;
 }
 
-cv::Mat ComputeCensusImage(cv::Mat &img)
+cv::Mat ComputeCensusImage(cv::Mat &img, int vpad, int hpad)
 {
 	// Assumes input is a BGR image or a 3-channel gray image.
 	int numRows = img.rows, numCols = img.cols;
@@ -55,8 +55,6 @@ cv::Mat ComputeCensusImage(cv::Mat &img)
 	ASSERT(censusImg.isContinuous())
 		long long *census = (long long*)censusImg.data;
 
-	int vpad = 3;
-	int hpad = 4;
 
 	memset(census, 0, imgGray.rows * imgGray.cols * sizeof(long long));
 	for (int i = 0; i < numRows; i++) {
@@ -182,6 +180,39 @@ int HammingDist(const long long x, const long long y)
 		val &= val - 1;
 	}
 	return dist;
+}
+
+MCImg<float> Compute9x7CensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign, float granularity)
+{
+	int numRows = imL.rows, numCols = imL.cols;
+	int numLevels = numDisps / granularity;
+	MCImg<float> dsiL(numRows, numCols, numLevels);
+
+	cv::Mat censusImgL = ComputeCensusImage(imL, 4, 3);
+	cv::Mat censusImgR = ComputeCensusImage(imR, 4, 3);
+
+	#pragma omp parallel for
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			for (int level = 0; level < numLevels; level++) {
+
+				float d = level * granularity;
+				float xm = x + sign * d;
+
+				// FIXME: has implicitly assumed "ndisps <= numCols", it's not safe.
+				if (xm < 0)				xm += numCols;
+				if (xm > numCols - 1)	xm -= numCols;
+
+				long long censusL = censusImgL.at<long long>(y, x);
+				long long censusR = censusImgR.at<long long>(y, xm + 0.5);
+
+				float censusDiff = HammingDist(censusL, censusR);
+				dsiL.get(y, x)[level] = censusDiff;
+			}
+		}
+	}
+
+	return dsiL;
 }
 
 MCImg<float> ComputeAdCensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign, float granularity)
