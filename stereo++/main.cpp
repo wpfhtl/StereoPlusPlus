@@ -26,11 +26,31 @@
 
 
 
+//int main(int argc, char **argv)
+//{
+//
+//	if (argc != 4) {
+//		printf("usage SGM.exe filePathImL filePathImR filePathDispOut\n");
+//		return -1;
+//	}
+//
+//	cv::Mat imL = cv::imread(argv[1]);
+//	cv::Mat imR = cv::imread(argv[2]);
+//	void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
+//		cv::Mat &dispL, cv::Mat &dispR, cv::Mat &validPixelMapL, cv::Mat &validPixelMapR);
+//	cv::Mat dispL, dispR, validPixelL, validPixelR;
+//	RunCSGM("KITTI", imL, imR, dispL, dispR, validPixelL, validPixelR);
+//	dispL *= 256.0;
+//	dispL.convertTo(dispL, CV_16UC1);
+//	cv::imwrite(argv[3], dispL);
+//
+//	return 0;
+//}
+
 
 
 
 #if 1
-
 static void PrintProgramEntryHeader(std::string methodName, int id)
 {
 	printf("\n\n========================================================\n");

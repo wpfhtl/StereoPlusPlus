@@ -81,14 +81,11 @@ MCImg<float> SemiGlobalCostAggregation(MCImg<float> &dsi, cv::Mat &img)
 		//const float alpha = 0.3;
 		//const float gamma = 63;
 
-		//const float P1 = 7;
-		//const float P2min = 17;
-		//const float alpha = 0.f;
-		//const float gamma = 100;
-		//const float P12 = 15;
-
-		const int P1 = 100 / 25;
-		const int P2 = 1600 / 25;
+		const float P1 = 7;
+		const float P2min = 17;
+		const float alpha = 0.f;
+		const float gamma = 100;
+		const float P12 = 15;
 
 		cv::Mat gray;
 		cv::cvtColor(img, gray, CV_BGR2GRAY);
@@ -101,10 +98,10 @@ MCImg<float> SemiGlobalCostAggregation(MCImg<float> &dsi, cv::Mat &img)
 			while (InBound(curLocations[id], numRows, numCols)) {
 				cv::Point2i pos = curLocations[id];
 				cv::Point2i lastPos = pos - offset;
-			/*	float &I_cur  = gray.at<float>(pos.y, pos.x);
+				float &I_cur  = gray.at<float>(pos.y, pos.x);
 				float &I_last = gray.at<float>(lastPos.y, lastPos.x);
 				float P2 = -alpha * std::abs(I_cur - I_last) + gamma;
-				P2 = std::max(P2, P2min);*/
+				P2 = std::max(P2, P2min);
 				float minCost = FLT_MAX;
 
 				for (int d = 0; d < numDisps; d++) {
@@ -159,62 +156,8 @@ cv::Mat QuadraticInterpDisp(cv::Mat &disp, MCImg<float> &dsi, float granularity)
 	return dispOut;
 }
 
-cv::Mat ComputeCappedSobelImage(cv::Mat &imgIn, int sobelCapValue)
+MCImg<float> ComputeBirchfieldTomasiCostVolume(cv::Mat &sobelL, cv::Mat &sobelR, int numDisps, int sign)
 {
-
-	cv::Mat img;
-	if (imgIn.channels() == 3) {
-		cv::cvtColor(imgIn, img, CV_BGR2GRAY);
-	}
-	else {
-		img = imgIn.clone();
-	}
-	//cv::imshow("img", img);
-	//cv::waitKey(0);
-
-	int numRows = img.rows, numCols = img.cols;
-	cv::Mat sobelImage(numRows, numCols, CV_8UC1);
-	ASSERT(sobelImage.isContinuous());
-	memset(sobelImage.data, sobelCapValue, numRows * numCols * sizeof(unsigned char));
-
-	for (int y = 1; y < numRows - 1; ++y) {
-		for (int x = 1; x < numCols - 1; ++x) {
-			int sobelValue
-				= (1.f * img.at<unsigned char>(y - 1, x + 1) + 2.f * img.at<unsigned char>(y, x + 1) + 1.f * img.at<unsigned char>(y + 1, x + 1))
-				- (1.f * img.at<unsigned char>(y - 1, x - 1) + 2.f * img.at<unsigned char>(y, x - 1) + 1.f * img.at<unsigned char>(y + 1, x - 1));
-			if (sobelValue > sobelCapValue) sobelValue = 2 * sobelCapValue;
-			else if (sobelValue < -sobelCapValue) sobelValue = 0;
-			else sobelValue += sobelCapValue;
-			sobelImage.at<unsigned char>(y, x) = sobelValue;
-		}
-	}
-
-
-
-	//unsigned char *image = img.data;
-	//for (int y = 1; y < numRows - 1; ++y) {
-	//	for (int x = 1; x < numCols - 1; ++x) {
-	//		int sobelValue = (image[numCols*(y - 1) + x + 1] + 2 * image[numCols*y + x + 1] + image[numCols*(y + 1) + x + 1])
-	//			- (image[numCols*(y - 1) + x - 1] + 2 * image[numCols*y + x - 1] + image[numCols*(y + 1) + x - 1]);
-	//		if (sobelValue > sobelCapValue) sobelValue = 2 * sobelCapValue;
-	//		else if (sobelValue < -sobelCapValue) sobelValue = 0;
-	//		else sobelValue += sobelCapValue;
-	//		sobelImage.data[numCols*y + x] = sobelValue;
-	//	}
-	//}
-
-	return sobelImage;
-}
-
-MCImg<float> ComputeBirchfieldTomasiCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign)
-{
-	cv::Mat sobelL = ComputeCappedSobelImage(imL, 15);
-	cv::Mat sobelR = ComputeCappedSobelImage(imR, 15);
-
-	//cv::imshow("sobelL", sobelL);
-	//cv::waitKey(0);
-	//cv::imshow("sobelR", sobelR);
-	//cv::waitKey(0);
 
 	int numRows = sobelL.rows, numCols = sobelR.cols;
 	cv::Mat leftHalfImgL(numRows, numCols, CV_8UC1), rightHalfImgL(numRows, numCols, CV_8UC1);
@@ -283,7 +226,7 @@ MCImg<float> ComputeBirchfieldTomasiCostVolume(cv::Mat &imL, cv::Mat &imR, int n
 	return dsiL;
 }
 
-MCImg<float> Compute5x5CensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign)
+MCImg<float> Compute5x5CensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps)
 {
 	float granularity = 1.f;
 	int numRows = imL.rows, numCols = imL.cols;
@@ -293,7 +236,7 @@ MCImg<float> Compute5x5CensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps
 	cv::Mat censusImgL = ComputeCensusImage(imL, 2, 2);
 	cv::Mat censusImgR = ComputeCensusImage(imR, 2, 2);
 
-	#pragma omp parallel for
+#pragma omp parallel for
 	for (int y = 0; y < numRows; y++) {
 		for (int x = 0; x < numCols; x++) {
 			for (int level = 0; level < numLevels; level++) {
@@ -318,15 +261,9 @@ MCImg<float> Compute5x5CensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps
 }
 
 
-static void CombineBirchfieldTomasiAnd5x5Census(MCImg<float> &dsiBT, MCImg<float> &dsiCensus)
+MCImg<float> CombineBirchfieldTomasiAnd5x5Census(MCImg<float> &dsiBT, MCImg<float> &dsiCensus)
 {
-	const float censusWeight = 1.0 / 6.0;
-	ASSERT(dsiBT.w == dsiCensus.w && dsiBT.h == dsiCensus.h && dsiBT.n == dsiCensus.n);
-	int N = dsiBT.w * dsiBT.h * dsiBT.n;
 
-	for (int i = 0; i < N; i++) {
-		dsiCensus.data[i] = dsiBT.data[i] + censusWeight * dsiCensus.data[i];
-	}
 }
 
 static void BoxFilterCostVolume(MCImg<float> &dsi, int radius)
@@ -365,38 +302,11 @@ void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
 	int numDisps, maxDisp, visualizeScale;
 	SetupStereoParameters(rootFolder, numDisps, maxDisp, visualizeScale);
 
-	//cv::imshow("imL", imL);
-	//cv::waitKey(0);
-
-
-	/*MCImg<float> dsiCensus = Compute5x5CensusCostVolume(imL, imR, numDisps, -1);
-	cv::Mat dispCensus = WinnerTakesAll(dsiCensus, 1.f);
-	dispCensus.convertTo(dispCensus, CV_8UC1);
-	cv::imshow("dispCensus", dispCensus);
-	cv::waitKey(0);*/
-
-	//MCImg<float> dsiBT = ComputeBirchfieldTomasiCostVolume(imL, imR, numDisps, -1);
-	//cv::Mat dispBT = WinnerTakesAll(dsiBT, 1.f);
-	//dispBT.convertTo(dispBT, CV_8UC1);
-	//cv::imshow("dispBT", dispBT);
-	//cv::waitKey(0);
-	//return;
-
-
 	// Step 1 - Building Cost Volume
 	//MCImg<float> dsiL = ComputeAdGradientCostVolume(imL, imR, numDisps, -1, GRANULARITY);
 	//MCImg<float> dsiR = ComputeAdGradientCostVolume(imR, imL, numDisps, +1, GRANULARITY);
-	/*MCImg<float> dsiL = Compute9x7CensusCostVolume(imL, imR, numDisps, -1, 1.f);
-	MCImg<float> dsiR = Compute9x7CensusCostVolume(imR, imL, numDisps, +1, 1.f);*/
-	//MCImg<float> dsiL = ComputeBirchfieldTomasiCostVolume(imL, imR, numDisps, -1);
-	//MCImg<float> dsiR = ComputeBirchfieldTomasiCostVolume(imR, imL, numDisps, +1);
-
-	MCImg<float> dsiBTL = ComputeBirchfieldTomasiCostVolume(imL, imR, numDisps, -1);
-	MCImg<float> dsiBTR = ComputeBirchfieldTomasiCostVolume(imR, imL, numDisps, +1);
-	MCImg<float> dsiL = Compute5x5CensusCostVolume(imL, imR, numDisps, -1);
-	MCImg<float> dsiR = Compute5x5CensusCostVolume(imR, imL, numDisps, +1);
-	CombineBirchfieldTomasiAnd5x5Census(dsiBTL, dsiL);
-	CombineBirchfieldTomasiAnd5x5Census(dsiBTR, dsiR);
+	MCImg<float> dsiL = Compute9x7CensusCostVolume(imL, imR, numDisps, -1, 1.f);
+	MCImg<float> dsiR = Compute9x7CensusCostVolume(imR, imL, numDisps, +1, 1.f);
 
 
 	int numRows = imL.rows, numCols = imL.cols;
@@ -409,12 +319,6 @@ void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
 
 	BoxFilterCostVolume(dsiL, 2);
 	BoxFilterCostVolume(dsiR, 2);
-
-
-	//cv::Mat dispRaw = WinnerTakesAll(dsiL, 1.f);
-	//dispRaw.convertTo(dispRaw, CV_8UC1);
-	//cv::imshow("dispRaw", dispRaw);
-	//cv::waitKey(0);
 
 
 	// Step 2 - Aggregate cost volume at 8 different directions
@@ -440,12 +344,6 @@ void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
 			}
 		}
 	}
-
-	//cv::Mat dispImg;
-	//dispL.convertTo(dispImg, CV_8UC1);
-	//cv::imshow("dispOut", dispImg);
-	//cv::waitKey(0);
-
 	//validPixelMapR = CrossCheck(dispR, dispL, +1, 0.5f);
 	//cv::imshow("consitency map", validPixelMapL);
 	//cv::waitKey(0);
@@ -472,7 +370,7 @@ void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
 	//EvaluateDisparity(rootFolder, dispL, 0.5f);
 }
 
-
+std::string kittiTestCaseId = "000000_10";
 
 void TestSemiGlobalMatching()
 {

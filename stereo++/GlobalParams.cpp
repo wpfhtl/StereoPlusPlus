@@ -28,6 +28,9 @@ private:
 public:
 };
 
+std::string kittiTestCaseId = "000000_10";
+
+
 MCImg<float>				gDsiL;
 MCImg<float>				gDsiR;
 MCImg<float>				gSimWeightsL;
@@ -92,6 +95,7 @@ autoInitObj;
 
 GlobalParamsInitializer::GlobalParamsInitializer()
 {
+	//return;
 	std::string paramFilePath = "d:/data/stereo_params.txt";
 	FILE *fid = fopen(paramFilePath.c_str(), "r");
 	ASSERT(fid != NULL);

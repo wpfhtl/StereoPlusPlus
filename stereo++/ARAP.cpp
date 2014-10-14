@@ -614,7 +614,8 @@ static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	cv::Mat labelMapL, labelMapR, contourImgL, contourImgR;
 	extern int SEGMENT_LEN;
 	//int numPreferedRegions = (numRows * numCols) / (SEGMENT_LEN * SEGMENT_LEN);
-	int numPreferedRegions = (numCols / 8 + 1) * (numRows / 8 + 1);
+	//int numPreferedRegions = (numCols / 8 + 1) * (numRows / 8 + 1);
+	int numPreferedRegions = 1000;
 	float compactness = 20.f;
 	int numSegsL = SLICSegmentation(imL, numPreferedRegions, compactness, labelMapL, contourImgL);
 	int numSegsR = SLICSegmentation(imR, numPreferedRegions, compactness, labelMapR, contourImgR);
@@ -720,11 +721,28 @@ static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 
 void TestARAP()
 {
+#if 0
 	extern std::string ROOTFOLDER;
 	std::string rootFolder = ROOTFOLDER;
 
 	cv::Mat imL = cv::imread("D:/data/stereo/" + rootFolder + "/im2.png");
 	cv::Mat imR = cv::imread("D:/data/stereo/" + rootFolder + "/im6.png");
 
-	RunARAP(rootFolder, imL, imR);
+#else
+	cv::Mat imL, imR;
+	extern std::string ROOTFOLDER;
+	if (ROOTFOLDER == "KITTI") {
+		extern bool useKitti;
+		extern std::string kittiTestCaseId;
+
+		imL = cv::imread("D:/data/KITTI/training/colored_0/" + kittiTestCaseId + ".png");
+		imR = cv::imread("D:/data/KITTI/training/colored_1/" + kittiTestCaseId + ".png");
+	}
+	else {
+		imL = cv::imread("D:/data/stereo/" + ROOTFOLDER + "/im2.png");
+		imR = cv::imread("D:/data/stereo/" + ROOTFOLDER + "/im6.png");
+	}
+#endif
+
+	RunARAP(ROOTFOLDER, imL, imR);
 }

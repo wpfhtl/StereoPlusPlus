@@ -77,13 +77,8 @@ static void EvaluateDisparityKITTI(cv::Mat &disp)
 
 	GT_NOC.convertTo(GT_NOC, CV_32FC1, 1.f / 256.f);
 	GT_ALL.convertTo(GT_ALL, CV_32FC1, 1.f / 256.f);
-	//GT_NOC.convertTo(GT_NOC, CV_32FC1);
-	//GT_ALL.convertTo(GT_ALL, CV_32FC1);
-	//GT_NOC /= 256.0;
-	//GT_ALL /= 256.0;
 
 
-	printf("%d\n%d\n%d\n%d\n", disp.channels(), GT_NOC.channels(), disp.type(), GT_NOC.type());
 	cv::Mat absDiffNoc, absDiffAll;
 	cv::absdiff(disp, GT_NOC, absDiffNoc);
 	cv::absdiff(disp, GT_ALL, absDiffAll);
