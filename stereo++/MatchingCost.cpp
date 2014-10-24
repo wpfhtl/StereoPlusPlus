@@ -217,8 +217,8 @@ MCImg<float> Compute9x7CensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps
 
 MCImg<float> ComputeAdCensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign, float granularity)
 {
-	#define AD_LAMBDA		30.f
-	#define CENSUS_LAMBDA	30.f
+	#define AD_LAMBDA		600.f
+	#define CENSUS_LAMBDA	10.f
 
 	int numRows = imL.rows, numCols = imL.cols;
 	int numLevels = numDisps / granularity;
@@ -420,21 +420,201 @@ template<typename T> static inline T BilinearInterp(cv::Mat &im, int y, float x)
 	return wL * im.at<T>(y, xL) + wR * im.at<T>(y, xR);
 }
 
+float gExpTable[256 * 3];
+
+static void InitExpTable(float *table)
+{
+	for (int dist = 0; dist < 256 * 3; dist++) {
+		gExpTable[dist] = exp(-dist / 30.f);
+	}
+}
+
+std::vector<cv::Vec3b> gMeanLabColorsL, gMeanLabColorsR;
+
+
+inline float __slantedPlaneCost(int yc, int xc, int numRows, int numCols, cv::Mat &img,
+	SlantedPlane &slantedPlane, int maxDisp, MCImg<float> &dsi, int STRIDE = 1)
+{
+	float totalCost = 0.f;
+	float accWeight = 0.f;
+	for (int STRIDE = 1; STRIDE <= 2; STRIDE++) {
+		cv::Vec3b center = img.at<cv::Vec3b>(yc, xc);
+		for (int y = yc - PATCHRADIUS; y <= yc + PATCHRADIUS; y += STRIDE) {
+			for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE) {
+				if (InBound(y, x, numRows, numCols)) {
+					cv::Vec3b &c = img.at<cv::Vec3b>(y, x);
+					float w = gExpTable[L1Dist(c, center)];
+					int  d = slantedPlane.ToDisparity(y, x) + 0.5;
+					d = std::max(0, std::min(maxDisp, d));
+
+					totalCost += w * dsi.get(y, x)[d];
+					accWeight += w;
+				}
+			}
+		}
+	}
+	return totalCost / accWeight;
+}
+
 float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int sign)
 {
+	
+	static int initExpTable = false;
+	if (!initExpTable) {
+		InitExpTable(gExpTable);
+		initExpTable = true;
+	}
+
+	if (std::abs(slantedPlane.nx) > 0.3 && std::abs(slantedPlane.ny) > 0.3) {
+		return 1e+7;
+	}
+	if (std::abs(slantedPlane.nz < 0.5)) {
+		return 1e+7;
+	}
+
 	extern int INTERP_ONLINE;
+	extern std::string ROOTFOLDER;
+	extern cv::Mat gImLabL, gImLabR;
+
+	if (gDsiL.data != NULL/*ROOTFOLDER == "KITTI"*/) {
+
+		//printf("sdfsdfsdf\n");
+		extern cv::Mat gLabelMapL, gLabelMapR;
+
+		MCImg<float> &dsi = (sign == -1 ? gDsiL : gDsiR);
+		cv::Mat &img = (sign == -1 ? gImLabL : gImLabR);
+		cv::Mat &labelMap = (sign == -1 ? gLabelMapL : gLabelMapR);
+		int numRows = dsi.h, numCols = dsi.w, maxLevel = dsi.n - 1;
+		//int STRIDE = 1;
+		//std::vector<cv::Vec3b> &segMeanColors = (sign == -1 ? gMeanLabColorsL : gMeanLabColorsR);
+		//int segId = labelMap.at<int>(yc, xc);
+		//cv::Vec3b center = segMeanColors[segId];
+		cv::Vec3b center = img.at<cv::Vec3b>(yc, xc);
+		float totalCost = 0.f, accWeight = 0.f;
+
+#if 1
+		for (int STRIDE = 1; STRIDE <= 2; STRIDE++) {
+			for (int y = yc - PATCHRADIUS; y <= yc + PATCHRADIUS; y += STRIDE) {
+				for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE) {
+					if (InBound(y, x, numRows, numCols)) {
+						cv::Vec3b &c = img.at<cv::Vec3b>(y, x);
+						float w = gExpTable[L1Dist(c, center)];
+						float d = slantedPlane.ToDisparity(y, x);
+						int level = 0.5 + d / GRANULARITY;
+						level = std::max(0, std::min(maxLevel, level));
+
+						totalCost += w * dsi.get(y, x)[level];
+						accWeight += w;
+					}
+				}
+			}
+		}
+		return totalCost / accWeight;
+#else
+		extern std::vector<std::vector<cv::Point2i>> gSegPixelListsL, gSegPixelListsR;
+		std::vector<std::vector<cv::Point2i>> &segPixelLists = (sign == -1 ? gSegPixelListsL : gSegPixelListsR);
+		int id = labelMap.at<int>(yc, xc);
+		std::vector<cv::Point2i> &pixelList = segPixelLists[id];
+
+		for (int i = 0; i < pixelList.size(); i++) {
+			int y = pixelList[i].y;
+			int x = pixelList[i].x;
+			float d = slantedPlane.ToDisparity(y, x);
+			int level = 0.5 + d / GRANULARITY;
+			level = std::max(0, std::min(maxLevel, level));
+
+			totalCost +=  dsi.get(y, x)[level];
+		}
+		totalCost /= pixelList.size();
+		//return totalCost;
+
+		extern std::vector<std::vector<int>> segAnchorIndsL, segAnchorIndsR;
+		std::vector<std::vector<int>> &segAnchorInds = (sign == -1 ? segAnchorIndsL : segAnchorIndsR);
+		std::vector<int> &anchorInds = segAnchorInds[id];
+		float anchorCost = 0.f;
+		for (int i = 0; i < anchorInds.size(); i++) {
+			int yc = pixelList[anchorInds[i]].y;
+			int xc = pixelList[anchorInds[i]].x;
+			anchorCost += __slantedPlaneCost(yc, xc, numRows, numCols, img,
+				slantedPlane, dsi.n - 1, dsi, 1);
+		}
+		anchorCost /= anchorInds.size();
+
+
+		return 0.5 * totalCost + 0.5 * anchorCost;
+#endif
+
+		
+	}
+	else {
+	//if (ROOTFOLDER == "Midd3") {
+		// do online matching cost calculation
+		
+		extern cv::Mat gLabelMapL, gLabelMapR;
+		extern cv::Mat gSobelImgL, gSobelImgR, gCensusImgL, gCensusImgR;
+
+		cv::Mat &labImg		= (sign == -1 ? gImLabL : gImLabR);
+		cv::Mat &labelMap	= (sign == -1 ? gLabelMapL : gLabelMapR);
+		cv::Mat &sobelImgL	= (sign == -1 ? gSobelImgL : gSobelImgR);
+		cv::Mat &sobelImgR	= (sign == -1 ? gSobelImgR : gSobelImgL);
+		cv::Mat &censusImgL = (sign == -1 ? gCensusImgL : gCensusImgR);
+		cv::Mat &censusImgR = (sign == -1 ? gCensusImgR : gCensusImgL);
+		//cv::Mat &labImgL	= (sign == -1 ? gImLabL : gImLabR);
+		//cv::Mat &labImgR	= (sign == -1 ? gImLabR : gImLabL);
+
+		int numRows = labImg.rows, numCols = labImg.cols;
+		const int STRIDE = 1;
+		cv::Vec3b center = labImg.at<cv::Vec3b>(yc, xc);
+		float totalCost = 0.f, accWeight = 0.f;
+
+		for (int STRIDE = 1; STRIDE <= 2; STRIDE++) {
+			for (int y = yc - PATCHRADIUS; y <= yc + PATCHRADIUS; y += STRIDE) {
+				for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE) {
+					if (InBound(y, x, numRows, numCols)) {
+						cv::Vec3b &c = labImg.at<cv::Vec3b>(y, x);
+						/*	float w = 1.f;
+							if (labelMap.at<int>(yc, xc) != labelMap.at<int>(y, x)) {
+							w = gExpTable[L1Dist(c, center)];
+							}*/
+						float w = gExpTable[L1Dist(c, center)];
+						float d = slantedPlane.ToDisparity(y, x);
+						int xm = x + sign * d + 0.5;
+						xm = std::max(0, std::min(numCols - 1, xm));
+
+						unsigned char &sobelPixelL = sobelImgL.at<unsigned char>(y, x);
+						unsigned char &sobelPixelR = sobelImgR.at<unsigned char>(y, xm);
+						long long &censusPixelL = censusImgL.at<long long>(y, x);
+						long long &censusPixelR = censusImgR.at<long long>(y, xm);
+
+						float cost = std::abs((float)sobelPixelL - sobelPixelR)
+							+ 2.f * HammingDist(censusPixelL, censusPixelR);
+						//cv::Vec3b &rawPixelL = labImgL.at<cv::Vec3b>(y, x);
+						//cv::Vec3b &rawPixelR = labImgR.at<cv::Vec3b>(y, xm);
+						//float cost = std::min(30, L1Dist(rawPixelL, rawPixelR))
+						//	+ 2.f * HammingDist(censusPixelL, censusPixelR);
+
+						totalCost += w * cost;
+						accWeight += w;
+					}
+				}
+			}
+		}
+
+		return totalCost / accWeight;
+	}
+
 
 	if (INTERP_ONLINE) {
 		extern float SIMILARITY_GAMMA;
-		extern cv::Mat gImRgbL, gImRgbR, gImGradL, gImGradR;
-		int numRows = gImRgbL.rows, numCols = gImRgbL.cols;
+		extern cv::Mat gImLabL, gImLabR, gImGradL, gImGradR;
+		int numRows = gImLabL.rows, numCols = gImLabL.cols;
 		extern float COLORGRADALPHA;
 		extern float COLORMAXDIFF;
 		extern float GRADMAXDIFF;
 
 		// The color and gradient feature are in range [0, 1]
-		cv::Mat &imRgbL		= (sign == -1 ? gImRgbL : gImRgbR);
-		cv::Mat &imRgbR		= (sign == -1 ? gImRgbR : gImRgbL);
+		cv::Mat &imRgbL		= (sign == -1 ? gImLabL : gImLabR);
+		cv::Mat &imRgbR		= (sign == -1 ? gImLabR : gImLabL);
 		cv::Mat &imGradL	= (sign == -1 ? gImGradL : gImGradR);
 		cv::Mat &imGradR	= (sign == -1 ? gImGradR : gImGradL);
 
@@ -464,7 +644,7 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 				}
 			}
 		}
-
+		 
 		if (wsum <= 1.1f) {
 			return 1e5f;
 		}
@@ -482,8 +662,11 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 	float totalCost = 0.f;
 	float accWeight = 0.f;
 
+	cv::Mat &labImg = (sign == -1 ? gImLabL : gImLabR);
+	cv::Vec3b center = labImg.at<cv::Vec3b>(yc, xc);
+
 	if (gCostAggregationType == GRID) {
-		MCImg<float> w(PATCHWIDTH, PATCHWIDTH, 1, simWeights.line(yc * numCols + xc));
+		//MCImg<float> w(PATCHWIDTH, PATCHWIDTH, 1, simWeights.line(yc * numCols + xc));
 		for (int y = yc - PATCHRADIUS, id = 0; y <= yc + PATCHRADIUS; y += STRIDE) {
 			for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE, id++) {
 				if (InBound(y, x, numRows, numCols)) {
@@ -491,8 +674,14 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 					float d = slantedPlane.ToDisparity(y, x);
 					int level = 0.5 + d / GRANULARITY;
 					level = std::max(0, std::min(maxLevel, level));
-					totalCost += w.data[id] * dsi.get(y, x)[level];
-					accWeight += w.data[id];
+					
+					cv::Vec3b &c = labImg.at<cv::Vec3b>(y, x);
+					float w = gExpTable[L1Dist(c, center)];
+					totalCost += w * dsi.get(y, x)[level];
+					accWeight += w;
+
+					//totalCost += w.data[id] * dsi.get(y, x)[level];
+					//accWeight += w.data[id];
 				}
 			}
 		}
@@ -516,15 +705,21 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 
 void InitGlobalColorGradientFeatures(cv::Mat &imL, cv::Mat &imR)
 {
-	extern cv::Mat gImRgbL, gImRgbR, gImGradL, gImGradR;
-	imL.convertTo(gImRgbL, CV_32FC3, 1.f / 255.f);
-	imR.convertTo(gImRgbR, CV_32FC3, 1.f / 255.f);
+	extern cv::Mat gImLabL, gImLabR, gImGradL, gImGradR;
+	imL.convertTo(gImLabL, CV_32FC3, 1.f / 255.f);
+	imR.convertTo(gImLabR, CV_32FC3, 1.f / 255.f);
 	gImGradL = ComputeGradientImage(imL);
 	gImGradR = ComputeGradientImage(imR);
 }
 
 void InitGlobalDsiAndSimWeights(cv::Mat &imL, cv::Mat &imR, int numDisps)
 {
+	extern cv::Mat gImLabL, gImLabR;
+	gImLabL = imL.clone();
+	gImLabR = imR.clone();
+	//cv::cvtColor(imL, gImLabL, CV_BGR2Lab);
+	//cv::cvtColor(imR, gImLabR, CV_BGR2Lab);
+
 	extern float SIMILARITY_GAMMA;
 	int numRows = imL.rows, numCols = imL.cols;
 	if (gMatchingCostType == ADCENSUS) {
@@ -541,9 +736,9 @@ void InitGlobalDsiAndSimWeights(cv::Mat &imL, cv::Mat &imR, int numDisps)
 
 	if (gCostAggregationType == GRID) {
 		bs::Timer::Tic("Precompute Similarity Weights");
-		MCImg<float> PrecomputeSimilarityWeights(cv::Mat &img, int patchRadius, int simGamma);
-		gSimWeightsL = PrecomputeSimilarityWeights(imL, PATCHRADIUS, SIMILARITY_GAMMA);
-		gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITY_GAMMA);
+		//MCImg<float> PrecomputeSimilarityWeights(cv::Mat &img, int patchRadius, int simGamma);
+		//gSimWeightsL = PrecomputeSimilarityWeights(imL, PATCHRADIUS, SIMILARITY_GAMMA);
+		//gSimWeightsR = PrecomputeSimilarityWeights(imR, PATCHRADIUS, SIMILARITY_GAMMA);
 		bs::Timer::Toc();
 	}
 	else if (gCostAggregationType == TOP50) {

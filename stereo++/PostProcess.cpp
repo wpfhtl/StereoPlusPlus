@@ -111,6 +111,10 @@ float SelectWeightedMedianFromPatch(cv::Mat &disp, int yc, int xc, float *w)
 
 void WeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixelMap, cv::Mat &img)
 {
+	float expTable[256 * 3];
+	for (int dist = 0; dist < 256 * 3; dist++) {
+		expTable[dist] = exp(-dist / 30.f);
+	}
 	cv::Mat dispOut = disp.clone();
 	int numRows = disp.rows, numCols = disp.cols;
 	float *w = new float[PATCHWIDTH * PATCHWIDTH];
@@ -126,7 +130,8 @@ void WeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixelMap, cv
 				for (int id = 0, y = yc - PATCHRADIUS; y <= yc + PATCHRADIUS; y++) {
 					for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x++, id++) {
 						if (InBound(y, x, numRows, numCols)) {
-							w[id] = exp(-(float)L1Dist(cc, img.at<cv::Vec3b>(y, x)) / SIMILARITY_GAMMA);
+							//w[id] = exp(-(float)L1Dist(cc, img.at<cv::Vec3b>(y, x)) / SIMILARITY_GAMMA);
+							w[id] = expTable[L1Dist(cc, img.at<cv::Vec3b>(y, x))];
 						}
 					}
 				}
@@ -137,6 +142,92 @@ void WeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixelMap, cv
 	}
 
 	delete[] w;
+}
+
+void PixelwiseOcclusionFilling(cv::Mat &disp, cv::Mat &validPixelMap)
+{
+	int numRows = disp.rows, numCols = disp.cols;
+	cv::Mat processed = cv::Mat::zeros(numRows, numCols, CV_8UC1);
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			if (!validPixelMap.at<bool>(y, x) && !processed.at<bool>(y, x)) {
+				int xL = x - 1;
+				int xR = x + 1;
+				float dL = FLT_MAX;
+				float dR = FLT_MAX;
+				while (!validPixelMap.at<bool>(y, xL) && 0 <= xL)		xL--;
+				while (!validPixelMap.at<bool>(y, xR) && xR < numCols)	xR++;
+				if (xL >= 0)		dL = disp.at<float>(y, xL);
+				if (xR < numCols)	dR = disp.at<float>(y, xR);
+				float dInterp = std::min(dL, dR);
+				if (dInterp == FLT_MAX) {
+					continue;
+				}
+				for (int xx = xL + 1; xx <= xR - 1; xx++) {
+					disp.at<float>(y, xx) = dInterp;
+					processed.at<bool>(y, xx) = true;
+				}
+			}
+		}
+	}
+}
+
+void FastWeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixelMap, cv::Mat &img)
+{
+	// Disparity of invalid pixels do not contribute
+	float expTable[256 * 3];
+	for (int dist = 0; dist < 256 * 3; dist++) {
+		expTable[dist] = exp(-dist / 30.f);
+	}
+	cv::Mat dispOut = disp.clone();
+	int numRows = disp.rows, numCols = disp.cols;
+
+	// DO NOT USE PARALLEL FOR HERE !!
+	// IT WILL CAUSE WRITING CONFLICT IN w !!!
+	for (int yc = 0; yc < numRows; yc++) {
+		for (int xc = 0; xc < numCols; xc++) {
+			if (!validPixelMap.at<bool>(yc, xc)) {
+
+				cv::Vec3b center = img.at<cv::Vec3b>(yc, xc);
+				std::vector<std::pair<float, float>> depthWeightPairs;
+				depthWeightPairs.reserve(2 * PATCHWIDTH * PATCHWIDTH);
+
+				for (int STRIDE = 1; STRIDE <= 2; STRIDE++) {
+					for (int y = yc - PATCHRADIUS; y <= yc + PATCHRADIUS; y += STRIDE) {
+						for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE) {
+							if (InBound(y, x, numRows, numCols)
+								&& validPixelMap.at<bool>(y, x)) {
+								float w = expTable[L1Dist(center, img.at<cv::Vec3b>(y, x))];
+								depthWeightPairs.push_back(std::make_pair(disp.at<float>(y, x), w));
+							}
+						}
+					}
+				}
+
+				std::sort(depthWeightPairs.begin(), depthWeightPairs.end());
+
+				float wAcc = 0.f, wSum = 0.f;
+				for (int i = 0; i < depthWeightPairs.size(); i++) {
+					wSum += depthWeightPairs[i].second;
+				}
+				for (int i = 0; i < depthWeightPairs.size(); i++) {
+					wAcc += depthWeightPairs[i].second;
+					if (wAcc >= wSum / 2.f) {
+						// Note that this line can always be reached
+						if (i > 0) {
+							dispOut.at<float>(yc, xc) = (depthWeightPairs[i - 1].first + depthWeightPairs[i].first) / 2.f;
+						}
+						else {
+							dispOut.at<float>(yc, xc) = depthWeightPairs[i].first;
+						}
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	dispOut.copyTo(disp);
 }
 
 std::vector<float> DetermineConfidence(cv::Mat &validPixelMap, std::vector<std::vector<cv::Point2i>> &segPixelLists)

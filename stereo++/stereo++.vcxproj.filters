@@ -20,6 +20,15 @@
     <Filter Include="gco-v3.0">
       <UniqueIdentifier>{094b6589-8528-4d54-a29d-f8c9c263dd22}</UniqueIdentifier>
     </Filter>
+    <Filter Include="spsstereo">
+      <UniqueIdentifier>{733213f3-031a-4b47-98c1-ee0c7bb11cfa}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="MeanShift">
+      <UniqueIdentifier>{4a07fed6-b64c-4d54-92f7-b92c6dcb8571}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="daisy">
+      <UniqueIdentifier>{0740abba-0b2e-46c5-b64a-5a55c1f7e647}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="MCImg.h">
@@ -81,6 +90,30 @@
     </ClInclude>
     <ClInclude Include="PostProcess.h">
       <Filter>LocalMethods</Filter>
+    </ClInclude>
+    <ClInclude Include="spsstereo\defParameter.h">
+      <Filter>spsstereo</Filter>
+    </ClInclude>
+    <ClInclude Include="spsstereo\SGMStereo.h">
+      <Filter>spsstereo</Filter>
+    </ClInclude>
+    <ClInclude Include="spsstereo\SPSStereo.h">
+      <Filter>spsstereo</Filter>
+    </ClInclude>
+    <ClInclude Include="MeanShift\ms.h">
+      <Filter>MeanShift</Filter>
+    </ClInclude>
+    <ClInclude Include="MeanShift\msImageProcessor.h">
+      <Filter>MeanShift</Filter>
+    </ClInclude>
+    <ClInclude Include="MeanShift\RAList.h">
+      <Filter>MeanShift</Filter>
+    </ClInclude>
+    <ClInclude Include="MeanShift\rlist.h">
+      <Filter>MeanShift</Filter>
+    </ClInclude>
+    <ClInclude Include="MeanShift\tdef.h">
+      <Filter>MeanShift</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -180,5 +213,82 @@
     <ClCompile Include="MySLIC.cpp">
       <Filter>LocalMethods</Filter>
     </ClCompile>
+    <ClCompile Include="spsstereo\SGMStereo.cpp">
+      <Filter>spsstereo</Filter>
+    </ClCompile>
+    <ClCompile Include="spsstereo\SPSStereo.cpp">
+      <Filter>spsstereo</Filter>
+    </ClCompile>
+    <ClCompile Include="PlaneFitting.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="MeanShift\ms.cpp">
+      <Filter>MeanShift</Filter>
+    </ClCompile>
+    <ClCompile Include="MeanShift\msImageProcessor.cpp">
+      <Filter>MeanShift</Filter>
+    </ClCompile>
+    <ClCompile Include="MeanShift\RAList.cpp">
+      <Filter>MeanShift</Filter>
+    </ClCompile>
+    <ClCompile Include="MeanShift\rlist.cpp">
+      <Filter>MeanShift</Filter>
+    </ClCompile>
+    <ClCompile Include="ioPfm.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="EvalParams.h">
+      <Filter>Evaluation</Filter>
+    </ClCompile>
+    <ClCompile Include="TestEigen.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="Rectification.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="test.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="daisy-1.8.1\src\corecv.cpp">
+      <Filter>daisy</Filter>
+    </ClCompile>
+    <ClCompile Include="daisy-1.8.1\src\daisy.cpp">
+      <Filter>daisy</Filter>
+    </ClCompile>
+    <ClCompile Include="daisy-1.8.1\src\general.cpp">
+      <Filter>daisy</Filter>
+    </ClCompile>
+    <ClCompile Include="daisy-1.8.1\src\image_io_bmp.cpp">
+      <Filter>daisy</Filter>
+    </ClCompile>
+    <ClCompile Include="daisy-1.8.1\src\image_io_jpeg.cpp">
+      <Filter>daisy</Filter>
+    </ClCompile>
+    <ClCompile Include="daisy-1.8.1\src\image_io_png.cpp">
+      <Filter>daisy</Filter>
+    </ClCompile>
+    <ClCompile Include="daisy-1.8.1\src\image_io_pnm.cpp">
+      <Filter>daisy</Filter>
+    </ClCompile>
+    <ClCompile Include="daisy-1.8.1\src\image_manipulation.cpp">
+      <Filter>daisy</Filter>
+    </ClCompile>
+    <ClCompile Include="daisy-1.8.1\src\interaction.cpp">
+      <Filter>daisy</Filter>
+    </ClCompile>
+    <ClCompile Include="daisy-1.8.1\src\progress_bar.cpp">
+      <Filter>daisy</Filter>
+    </ClCompile>
+    <ClCompile Include="daisy-1.8.1\src\main.cpp">
+      <Filter>daisy</Filter>
+    </ClCompile>
+    <ClCompile Include="wmf_main.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="MeanShift\MSReadme.txt">
+      <Filter>MeanShift</Filter>
+    </Text>
   </ItemGroup>
 </Project>

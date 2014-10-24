@@ -3,13 +3,24 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include "ReleaseAssert.h"
-
+#include "EvalParams.h"
 
 
 void SetupStereoParameters(std::string rootFolder, int &numDisps, int &maxDisp, int &visualizeScale)
 {
-	if (rootFolder == "KITTI") {
-		numDisps = 220;
+	if (rootFolder == "Midd3") {
+		numDisps = 280;
+		visualizeScale = 1;
+		extern int gNumDisps;
+		if (gNumDisps > 0) {
+			numDisps = gNumDisps;
+		}
+		if (numDisps % 16 != 0) {
+			numDisps += (16 - numDisps % 16);
+		}
+	}
+	else if (rootFolder == "KITTI") {
+		numDisps = 224;
 		visualizeScale = 1;
 	}
 	else if (rootFolder == "tsukuba") {
@@ -31,6 +42,9 @@ void SetupStereoParameters(std::string rootFolder, int &numDisps, int &maxDisp, 
 	else {
 		numDisps = 70;
 		visualizeScale = 3;
+	}
+	if (numDisps % 16 != 0) {
+		numDisps += (16 - numDisps % 16);
 	}
 	maxDisp = numDisps - 1;
 }
@@ -69,8 +83,12 @@ void RegisterMouseCallbacks(std::string mouseCallbackName, void *callbackParams)
 	ASSERT(0)
 }
 
-static void EvaluateDisparityKITTI(cv::Mat &disp)
+static void EvaluateDisparityKITTI(cv::Mat &disp, void *ptrEvalParams)
 {
+	printf("EvaluateDisparityKITTI...\n");
+	//disp *= 3;
+
+
 	extern std::string kittiTestCaseId;
 	cv::Mat &GT_NOC = cv::imread("D:/data/KITTI/training/disp_noc/" + kittiTestCaseId + ".png", CV_LOAD_IMAGE_UNCHANGED);
 	cv::Mat &GT_ALL = cv::imread("D:/data/KITTI/training/disp_occ/" + kittiTestCaseId + ".png", CV_LOAD_IMAGE_UNCHANGED);
@@ -121,25 +139,145 @@ static void EvaluateDisparityKITTI(cv::Mat &disp)
 	printf("        %6s %6s %6s %6s\n", "2px", "3px", "4px", "5px");
 	printf("errNOC  %6.2f %6.2f %6.2f %6.2f\n",
 		errRatesNoc[2], errRatesNoc[3], errRatesNoc[4], errRatesNoc[5]);
-	printf("errALL  %6.2f %6.2f %6.2f %6.2f\n",
+	printf("errALL  %6.2f %6.2f %6.2f %6.2f\n\n",
 		errRatesAll[2], errRatesAll[3], errRatesAll[4], errRatesAll[5]);
 
-	cv::Mat disp16bitDetph;
-	disp.convertTo(disp16bitDetph, CV_16UC1, 256);
-	cv::imwrite("D:/code/rSGM/bin/Release/mydisp.png", disp16bitDetph);
+	//cv::Mat disp16bitDetph;
+	//disp.convertTo(disp16bitDetph, CV_16UC1, 256);
+	//cv::imwrite("D:/code/rSGM/bin/Release/mydisp.png", disp16bitDetph);
 
-	cv::Mat cmpImg;
-	cv::vconcat(disp, GT_ALL, cmpImg);
-	cmpImg.convertTo(cmpImg, CV_8UC1, 3.0);
-	cv::imshow("cmpImg", cmpImg);
-	cv::waitKey(0);
+	extern int VISUALIZE_EVAL;
+	if (VISUALIZE_EVAL) {
+		cv::Mat cmpImg;
+		cv::vconcat(disp, GT_ALL, cmpImg);
+		cmpImg.convertTo(cmpImg, CV_8UC1, 1.0);
+		cv::cvtColor(cmpImg, cmpImg, CV_GRAY2BGR);
+#if 1
+		cv::imshow("cmpImg", cmpImg);
+
+		void* callbackParams[] = { ptrEvalParams, &cmpImg };
+		void OnMouseTestARAPKITTI(int event, int x, int y, int flags, void *param);
+		if (ptrEvalParams != NULL) {
+			cv::setMouseCallback("cmpImg", OnMouseTestARAPKITTI, callbackParams);
+		}
+		cv::waitKey(0);
+#endif
+	}
 }
 
-void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f, 
+static void EvaluateDisparityMidd3(cv::Mat &disp, void *ptrEvalParams)
+{
+	printf("EvaluateDisparityMidd3...\n");
+
+	extern std::string midd3TestCaseId;
+	extern std::string midd3Resolution;
+	cv::Mat ReadFilePFM(std::string filePath);
+	cv::Mat GT   = ReadFilePFM("D:/data/MiddEval3/" + midd3Resolution + "/" + midd3TestCaseId + "/disp0GT.pfm");
+	cv::Mat MASK = cv::imread( "D:/data/MiddEval3/" + midd3Resolution + "/" + midd3TestCaseId + "/mask0nocc.png", CV_LOAD_IMAGE_UNCHANGED);
+
+
+
+	cv::Mat absDiff;
+	cv::absdiff(disp, GT, absDiff);
+
+	std::vector<float> errRatesNoc(6, 0), errRatesAll(6, 0);
+	int numGtPixelsNoc = 0, numGtPixelsAll = 0;
+	int numRows = disp.rows, numCols = disp.cols;
+
+	const float errThresholds[5] = { 0.5, 1, 2, 3, 4 };
+
+	// I has assumed the invalid values in the GT png file have been set to zero.
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			// NONOCC
+			if (MASK.at<unsigned char>(y, x) == 255) {
+				numGtPixelsNoc++;
+				for (int e = 0; e <= 4; e++) {
+					if (absDiff.at<float>(y, x) > errThresholds[e]) {
+						errRatesNoc[e] += 1.f;
+					}
+				}
+			}
+			// ALL
+			if (MASK.at<unsigned char>(y, x) >= 128) {
+				numGtPixelsAll++;
+				for (int e = 0; e <= 4; e++) {
+					if (absDiff.at<float>(y, x) > errThresholds[e]) {
+						errRatesAll[e] += 1.f;
+					}
+				}
+			}
+		}
+	}
+
+	for (int e = 0; e <= 4; e++) {
+		errRatesNoc[e] /= numGtPixelsNoc;
+		errRatesAll[e] /= numGtPixelsAll;
+		errRatesNoc[e] *= 100;
+		errRatesAll[e] *= 100;
+	}
+
+	printf("        %6s %6s %6s %6s\n", "0.5px", "1px", "2px", "4px");
+	printf("errNOC  %6.2f %6.2f %6.2f %6.2f\n",
+		errRatesNoc[0], errRatesNoc[1], errRatesNoc[2], errRatesNoc[4]);
+	printf("errALL  %6.2f %6.2f %6.2f %6.2f\n\n",
+		errRatesAll[0], errRatesAll[1], errRatesAll[2], errRatesAll[4]);
+
+
+	extern int VISUALIZE_EVAL;
+	if (VISUALIZE_EVAL) {
+		cv::Mat errImg(numRows, numCols, CV_8UC1);
+		for (int y = 0; y < numRows; y++) {
+			for (int x = 0; x < numCols; x++) {
+				if (absDiff.at<float>(y, x) > 1.0) {
+					errImg.at<unsigned char>(y, x) = 0;
+				}
+				else {
+					errImg.at<unsigned char>(y, x) = 255;
+				}
+			}
+		}
+
+
+
+		ARAPEvalParams *evalParams = (ARAPEvalParams*)(ptrEvalParams);
+		evalParams->GT = &GT;
+		evalParams->dispL = &disp;
+
+
+		cv::Mat dispVisualize, canvas;
+		int maxDisp = evalParams->numDisps - 1;
+		float visualizeFactor = 255.f / maxDisp;
+		disp.convertTo(dispVisualize, CV_8UC1, visualizeFactor);
+		cv::hconcat(dispVisualize, errImg, canvas);
+
+		while (canvas.rows > 700) {
+			cv::resize(canvas, canvas, cv::Size(canvas.cols / 2, canvas.rows / 2));
+		}
+		evalParams->canvas = &canvas;
+		cv::imshow("cmpImg", canvas);
+		void OnMouseTestPlanefitMidd3(int event, int x, int y, int flags, void *param);
+		if (ptrEvalParams != NULL) {
+			cv::setMouseCallback("cmpImg", OnMouseTestPlanefitMidd3, ptrEvalParams);
+		}
+		cv::waitKey(0);
+	}
+	
+}
+
+void EvaluateDisparity(std::string rootFolder, cv::Mat &dispL, float eps = 1.f,
 	void *auxParamsPtr = NULL, std::string mouseCallbackName = "OnMouseEvaluateDisparity")
 {
+	extern int DO_EVAL;
+	if (!DO_EVAL) {
+		return;
+	}
 	if (rootFolder == "KITTI") {
-		EvaluateDisparityKITTI(dispL);
+		EvaluateDisparityKITTI(dispL, auxParamsPtr);
+		return;
+	}
+	if (rootFolder == "Midd3") {
+		EvaluateDisparityMidd3(dispL, auxParamsPtr);
 		return;
 	}
 

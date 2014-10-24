@@ -6,6 +6,8 @@
 #include "BPOnFactorGraph.h"
 #include "ReleaseAssert.h"
 
+#include "EvalParams.h"
+
 
 
 /* Note: each OnMouse callback function should take a fixed list of parameters.
@@ -373,19 +375,6 @@ void OnMouseVisualizeSimilarityWegiths(int event, int x, int y, int flags, void 
 
 void OnMouseTestARAP(int event, int x, int y, int flags, void *param)
 {
-	struct ARAPEvalParams {
-		int numRows, numCols;
-		cv::Mat *labelMap;
-		cv::Mat *confidenceImg;
-		std::vector<cv::Point2f> *baryCenters;
-		std::vector<cv::Vec3f> *n;
-		std::vector<float> *u;
-		std::vector<std::vector<int>> *nbGraph;
-		std::vector<std::vector<cv::Point2i>> *segPixelLists;
-		ARAPEvalParams() : numRows(0), numCols(0), labelMap(0), baryCenters(0),
-			n(0), u(0), nbGraph(0), segPixelLists(0), confidenceImg(0) {}
-	};
-
 	cv::Mat tmpCanvas = (*(cv::Mat*)((void**)param)[1]).clone();
 	OnMouseEvaluateDisparityDefaultDrawing(event, x, y, flags, (void*)((void**)param + 1), tmpCanvas);
 
@@ -425,4 +414,186 @@ void OnMouseTestARAP(int event, int x, int y, int flags, void *param)
 
 
 	cv::imshow("OnMouseTestARAP", tmpCanvas);
+}
+
+void OnMouseTestARAPKITTI(int event, int x, int y, int flags, void *param)
+{
+	cv::Mat tmpCanvas = (*(cv::Mat*)((void**)param)[1]).clone();
+	//OnMouseEvaluateDisparityDefaultDrawing(event, x, y, flags, (void*)((void**)param + 1), tmpCanvas);
+
+	ARAPEvalParams *evalParams = (ARAPEvalParams*)((void**)param)[0];
+	int numRows = evalParams->numRows;
+	int numCols = evalParams->numCols;
+	if (evalParams->confidenceImg) {
+		evalParams->confidenceImg->copyTo(tmpCanvas(cv::Rect(0, numRows, numCols, numRows)));
+	}
+
+	if (event == CV_EVENT_LBUTTONDOWN)
+	{
+		if (!evalParams->labelMap || !evalParams->u || !evalParams->n || !evalParams->baryCenters) {
+			printf("(!evalParams->labelMap || !evalParams->u || !evalParams->n || !evalParams->baryCenters) is false!\n");
+			return;
+		}
+		y %= evalParams->numRows;
+		x %= evalParams->numCols;
+
+		std::vector<cv::Point2f> &baryCenters = *evalParams->baryCenters;
+		std::vector<cv::Vec3f>   &n = *evalParams->n;
+		std::vector<float>		 &u = *evalParams->u;
+		cv::Mat					 &labelMap = *evalParams->labelMap;
+
+		int id = labelMap.at<int>(y, x);
+		SlantedPlane sp = SlantedPlane::ConstructFromNormalDepthAndCoord(
+			n[id][0], n[id][1], n[id][2], u[id], baryCenters[id].y, baryCenters[id].x);
+
+		char textBuf[1024];
+		sprintf(textBuf, "( a,  b,  c) = (% 11.6f, % 11.6f, % 11.6f)", sp.a, sp.b, sp.c);
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2f(20, 50), CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+		sprintf(textBuf, "(nx, ny, nz) = (% 11.6f, % 11.6f, % 11.6f)", sp.nx, sp.ny, sp.nz);
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2f(20, 80), CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+		/*sprintf(textBuf, "bestCost(%3d, %3d) = %f", y, x, bestCostsL.at<float>(y, x));
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2f(20, 110), CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);*/
+
+		printf("( a,  b,  c) = (% 11.6f, % 11.6f, % 11.6f)\n", sp.a, sp.b, sp.c);
+		printf("(nx, ny, nz) = (% 11.6f, % 11.6f, % 11.6f)\n\n", sp.nx, sp.ny, sp.nz);
+	}
+
+
+	cv::imshow("cmpImg", tmpCanvas);
+}
+
+
+void OnMouseTestPlanefitMidd3(int event, int x, int y, int flags, void *param)
+{
+
+	if (event != CV_EVENT_LBUTTONDOWN 
+		&& event != CV_EVENT_LBUTTONDBLCLK 
+		&& event != CV_EVENT_RBUTTONDBLCLK) {
+		return;
+	}
+
+	ARAPEvalParams *evalParams = (ARAPEvalParams*)param;
+	cv::Mat tmpCanvas = evalParams->canvas->clone();
+	int numRows = evalParams->numRows;
+	int numCols = evalParams->numCols;
+	if (evalParams->confidenceImg) {
+		evalParams->confidenceImg->copyTo(tmpCanvas(cv::Rect(0, numRows, numCols, numRows)));
+	}
+
+	printf("tmpCanvas.rows = %d\n", tmpCanvas.rows);
+
+	x *= ((float)numRows / tmpCanvas.rows);
+	y *= ((float)numRows / tmpCanvas.rows);
+	y %= evalParams->numRows;
+	x %= evalParams->numCols;
+
+	if (event == CV_EVENT_LBUTTONDOWN) {
+		if (evalParams->dispL == NULL) {
+			printf("dispL == NULL\n");
+		}
+		else {
+			cv::Mat &dispL = *evalParams->dispL;
+			cv::Mat &GT = *evalParams->GT;
+			float dGT = GT.at<float>(y, x);
+			float dMY = dispL.at<float>(y, x);
+			char text[1024];
+			sprintf(text, "(%d, %d)  GT: %.2f  MINE: %.2f", y, x, dGT, dMY);
+			cv::putText(tmpCanvas, std::string(text), cv::Point2f(20, 50), 0, 0.6, cv::Scalar(0, 0, 255, 1), 2);
+			printf("(%d, %d)  GT: %.2f  MINE: %.2f\n", y, x, dGT, dMY);
+		}
+	}
+
+	if (event == CV_EVENT_LBUTTONDBLCLK || event == CV_EVENT_RBUTTONDBLCLK)
+	{
+		if (!evalParams->labelMap || !evalParams->u || !evalParams->n || !evalParams->baryCenters) {
+			printf("(!evalParams->labelMap || !evalParams->u || !evalParams->n || !evalParams->baryCenters) is false!\n");
+			return;
+		}
+		
+
+		std::vector<cv::Point2f> &baryCenters = *evalParams->baryCenters;
+		std::vector<cv::Vec3f>   &n = *evalParams->n;
+		std::vector<float>		 &u = *evalParams->u;
+		cv::Mat					 &labelMap = *evalParams->labelMap;
+
+		int id = labelMap.at<int>(y, x);
+		SlantedPlane sp = SlantedPlane::ConstructFromNormalDepthAndCoord(
+			n[id][0], n[id][1], n[id][2], u[id], baryCenters[id].y, baryCenters[id].x);
+
+		char textBuf[1024];
+		sprintf(textBuf, "( a,  b,  c) = (% 11.6f, % 11.6f, % 11.6f)", sp.a, sp.b, sp.c);
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2f(20, 50), CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+		sprintf(textBuf, "(nx, ny, nz) = (% 11.6f, % 11.6f, % 11.6f)", sp.nx, sp.ny, sp.nz);
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2f(20, 80), CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+		
+
+
+		// Compute matching cost of this region
+		MCImg<float> &dsiL = *evalParams->dsiL;
+		if (dsiL.data == NULL) {
+			cv::imshow("cmpImg", tmpCanvas);
+			return;
+		}
+
+		int numDisps = evalParams->numDisps;
+		float totalCost = 0.f;
+		extern std::vector<std::vector<cv::Point2i>> gSegPixelListsL, gSegPixelListsR;
+		std::vector<cv::Point2i> &pixelList = gSegPixelListsL[id];
+		if (event == CV_EVENT_LBUTTONDBLCLK) {
+			for (int i = 0; i < pixelList.size(); i++) {
+				int y = pixelList[i].y;
+				int x = pixelList[i].x;
+				int  d = sp.ToDisparity(y, x) + 0.5;
+				d = std::max(0, std::min(d, numDisps - 1));
+				totalCost += dsiL.get(y, x)[d];
+			}
+			totalCost /= pixelList.size();
+			printf("MY cost at segment %d:  MY:%8.2f\n", id, totalCost);
+			printf("( a,  b,  c) = (% 11.6f, % 11.6f, % 11.6f)\n", sp.a, sp.b, sp.c);
+			printf("(nx, ny, nz) = (% 11.6f, % 11.6f, % 11.6f)\n\n", sp.nx, sp.ny, sp.nz);
+		}
+		else if (event == CV_EVENT_RBUTTONDBLCLK) {
+
+			cv::Mat &dispGT = *(cv::Mat*)evalParams->GT;
+			std::vector<cv::Vec3f> xyds(pixelList.size());
+			for (int i = 0; i < xyds.size(); i++) {
+				xyds[i][0] = pixelList[i].x;
+				xyds[i][1] = pixelList[i].y;
+				xyds[i][2] = dispGT.at<float>(pixelList[i].y, pixelList[i].x);
+			}
+
+			cv::Vec3f RansacPlaneFitting(std::vector<cv::Vec3f> &xyds, float outlierThresh);
+			cv::Vec3f abc = RansacPlaneFitting(xyds, 2.0);
+			SlantedPlane gtPlane = SlantedPlane::ConstructFromAbc(abc[0], abc[1], abc[2]);
+			cv::Mat &dispImg = tmpCanvas(cv::Rect(0, 0, numCols, numRows));
+			cv::Mat &errImg = tmpCanvas(cv::Rect(numCols, 0, numCols, numRows));
+			totalCost = 0.f;
+			float visualizeFactor = 255.f / (numDisps - 1.f);
+			for (int i = 0; i < pixelList.size(); i++) {
+				int y = pixelList[i].y;
+				int x = pixelList[i].x;
+				float d = dispGT.at<float>(y, x);
+				dispImg.at<unsigned char>(y, x) = visualizeFactor * d + 0.5;
+				if (std::abs(d - gtPlane.ToDisparity(y, x)) < 2.0) {
+					errImg.at<unsigned char>(y, x) = 255;
+				}
+				else {
+					errImg.at<unsigned char>(y, x) = 0;
+				}
+				d = (int)(d + 0.5);
+				d = std::max(0.f, std::min(d, (float)numDisps - 1));
+				totalCost += dsiL.get(y, x)[(int)d];
+			}
+			totalCost /= pixelList.size();
+			printf("GT cost at segment %d:  GT:%8.2f\n", id, totalCost);
+			printf("( a,  b,  c) = (% 11.6f, % 11.6f, % 11.6f)\n", gtPlane.a, gtPlane.b, gtPlane.c);
+			printf("(nx, ny, nz) = (% 11.6f, % 11.6f, % 11.6f)\n\n", gtPlane.nx, gtPlane.ny, gtPlane.nz);
+		}
+	}
+	
+	//while (tmpCanvas.rows > 1000) {
+	//	cv::resize(tmpCanvas, tmpCanvas, cv::Size(tmpCanvas.cols / 2, tmpCanvas.rows / 2));
+	//}
+	cv::imshow("cmpImg", tmpCanvas);
+	
 }

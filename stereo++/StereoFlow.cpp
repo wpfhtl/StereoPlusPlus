@@ -19,7 +19,7 @@
 static enum {HINGE, COPLANAR, LEFTOCC, RIGHTOCC};
 
 
-static bool IsBoundaryPixel(cv::Point2i &p, cv::Mat &labelMap)
+bool IsBoundaryPixel(cv::Point2i &p, cv::Mat &labelMap)
 {
 	// Here the boundary refers to the segment boundary, not the image boundary.
 	// Pixels that are adjacent to at least two segments are called boundary pixels.

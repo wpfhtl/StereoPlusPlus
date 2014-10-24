@@ -87,8 +87,8 @@ MCImg<float> SemiGlobalCostAggregation(MCImg<float> &dsi, cv::Mat &img)
 		//const float gamma = 100;
 		//const float P12 = 15;
 
-		const int P1 = 100 / 25;
-		const int P2 = 1600 / 25;
+		const int P1 = 100 /25;
+		const int P2 = 1600/25;
 
 		cv::Mat gray;
 		cv::cvtColor(img, gray, CV_BGR2GRAY);
@@ -317,19 +317,19 @@ MCImg<float> Compute5x5CensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps
 	return dsiL;
 }
 
-
-static void CombineBirchfieldTomasiAnd5x5Census(MCImg<float> &dsiBT, MCImg<float> &dsiCensus)
+void CombineBirchfieldTomasiAnd5x5Census(MCImg<float> &dsiBT, MCImg<float> &dsiCensus)
 {
-	const float censusWeight = 1.0 / 6.0;
+	const float censusWeight = 1.0 / 0.5;
 	ASSERT(dsiBT.w == dsiCensus.w && dsiBT.h == dsiCensus.h && dsiBT.n == dsiCensus.n);
 	int N = dsiBT.w * dsiBT.h * dsiBT.n;
 
+	#pragma omp parallel for
 	for (int i = 0; i < N; i++) {
 		dsiCensus.data[i] = dsiBT.data[i] + censusWeight * dsiCensus.data[i];
 	}
 }
 
-static void BoxFilterCostVolume(MCImg<float> &dsi, int radius)
+void BoxFilterCostVolume(MCImg<float> &dsi, int radius)
 {
 	int numRows = dsi.h, numCols = dsi.w, numDisps = dsi.n;
 	cv::Size kernelSize = cv::Size(2 * radius + 1, 2 * radius + 1);
@@ -337,6 +337,7 @@ static void BoxFilterCostVolume(MCImg<float> &dsi, int radius)
 	cv::Mat population = cv::Mat::ones(numRows, numCols, CV_32FC1);
 	cv::boxFilter(population, population, population.type(), kernelSize, cv::Point(-1, -1), false, cv::BORDER_CONSTANT);
 
+	#pragma omp parallel for
 	for (int d = 0; d < numDisps; d++) {
 		cv::Mat costSlice(numRows, numCols, CV_32FC1);
 		for (int y = 0; y < numRows; y++) {
@@ -359,11 +360,11 @@ static void BoxFilterCostVolume(MCImg<float> &dsi, int radius)
 void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
 	cv::Mat &dispL, cv::Mat &dispR, cv::Mat &validPixelMapL, cv::Mat &validPixelMapR)
 {
-	bs::Timer::Tic("SGM");
 
 	const float GRANULARITY = 1.f;
 	int numDisps, maxDisp, visualizeScale;
 	SetupStereoParameters(rootFolder, numDisps, maxDisp, visualizeScale);
+	int numRows = imL.rows, numCols = imL.cols;
 
 	//cv::imshow("imL", imL);
 	//cv::waitKey(0);
@@ -393,13 +394,26 @@ void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
 
 	MCImg<float> dsiBTL = ComputeBirchfieldTomasiCostVolume(imL, imR, numDisps, -1);
 	MCImg<float> dsiBTR = ComputeBirchfieldTomasiCostVolume(imR, imL, numDisps, +1);
+	BoxFilterCostVolume(dsiBTL, 2);
+	BoxFilterCostVolume(dsiBTR, 2);
 	MCImg<float> dsiL = Compute5x5CensusCostVolume(imL, imR, numDisps, -1);
 	MCImg<float> dsiR = Compute5x5CensusCostVolume(imR, imL, numDisps, +1);
+	BoxFilterCostVolume(dsiL, 2);
+	BoxFilterCostVolume(dsiR, 2);
 	CombineBirchfieldTomasiAnd5x5Census(dsiBTL, dsiL);
 	CombineBirchfieldTomasiAnd5x5Census(dsiBTR, dsiR);
 
+	//MCImg<unsigned short> yamaguchiCostVolume(numRows, numCols, numDisps);
+	//yamaguchiCostVolume.LoadFromBinaryFile("D:\\data\\KITTI\\myresults\\Yamaguchi_CostVolume.bin");
+	//int N = numRows * numCols * numDisps;
+	//#pragma omp parallel for
+	//for (int i = 0; i < N; i++) {
+	//	dsiL.data[i] = yamaguchiCostVolume.data[i];
+	//}
 
-	int numRows = imL.rows, numCols = imL.cols;
+
+
+	
 	for (int retry = 0; retry < 100; retry++) {
 		int y = rand() % numRows;
 		int x = rand() % numCols;
@@ -407,8 +421,7 @@ void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
 		//printf("%f\n", dsiL.get(y, x)[d]);
 	}
 
-	BoxFilterCostVolume(dsiL, 2);
-	BoxFilterCostVolume(dsiR, 2);
+
 
 
 	//cv::Mat dispRaw = WinnerTakesAll(dsiL, 1.f);
@@ -425,21 +438,21 @@ void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
 	// Step 3 - Subpixel WTA using quadratic interpolation, followed by 3x3 median filtering
 	dispL = WinnerTakesAll(aggrDsiL, GRANULARITY);
 	dispR = WinnerTakesAll(aggrDsiR, GRANULARITY);
-	cv::medianBlur(dispL, dispL, 3);
-	cv::medianBlur(dispR, dispR, 3);
+	//cv::medianBlur(dispL, dispL, 3);
+	//cv::medianBlur(dispR, dispR, 3);
 	//dispL = QuadraticInterpDisp(dispL, aggrDsiL, GRANULARITY);
 	//dispR = QuadraticInterpDisp(dispR, aggrDsiR, GRANULARITY);
 
 
 	// Step 4 - Consistency Check
 	validPixelMapL = CrossCheck(dispL, dispR, -1, 1.f);
-	for (int y = 0; y < numRows; y++) {
-		for (int x = 0; x < numCols; x++) {
-			if (!validPixelMapL.at<bool>(y, x)) {
-				dispL.at<float>(y, x) = 0.f; 
-			}
-		}
-	}
+	//for (int y = 0; y < numRows; y++) {
+	//	for (int x = 0; x < numCols; x++) {
+	//		if (!validPixelMapL.at<bool>(y, x)) {
+	//			dispL.at<float>(y, x) = 0.f; 
+	//		}
+	//	}
+	//}
 
 	//cv::Mat dispImg;
 	//dispL.convertTo(dispImg, CV_8UC1);
@@ -468,8 +481,8 @@ void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
 
 	// Step 8 - Another final consistency checked will be great before you feed the result
 	//          into Joint Stereo Flow.
-	bs::Timer::Toc();
-	//EvaluateDisparity(rootFolder, dispL, 0.5f);
+
+	EvaluateDisparity(rootFolder, dispL, 0.5f);
 }
 
 

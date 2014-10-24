@@ -81,8 +81,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>D:\code\stereo++\stereo++;D:\code\opencv\build\include;D:\code\eigen-eigen-ffa86ffb5570;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\code\opencv\build\x64\vc12\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>D:\code\stereo++\stereo++;D:\code\opencv\build\include;D:\code\eigen-eigen-ffa86ffb5570;D:\code\opencv\sources\3rdparty\libpng;D:\code\stereo++\stereo++\png++;$(IncludePath);D:\code\stereo++\stereo++\daisy-1.8.1\include</IncludePath>
+    <LibraryPath>D:\code\opencv\build\x64\vc12\lib;D:\code\opencv\build\x64\vc12\staticlib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -147,6 +147,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>libpng.lib;zlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -157,6 +158,11 @@
     <ClInclude Include="gco-v3.0\graph.h" />
     <ClInclude Include="gco-v3.0\LinkedBlockList.h" />
     <ClInclude Include="MCImg.h" />
+    <ClInclude Include="MeanShift\ms.h" />
+    <ClInclude Include="MeanShift\msImageProcessor.h" />
+    <ClInclude Include="MeanShift\RAList.h" />
+    <ClInclude Include="MeanShift\rlist.h" />
+    <ClInclude Include="MeanShift\tdef.h" />
     <ClInclude Include="poly2tri\common\shapes.h" />
     <ClInclude Include="poly2tri\common\utils.h" />
     <ClInclude Include="poly2tri\poly2tri.h" />
@@ -168,6 +174,9 @@
     <ClInclude Include="ReleaseAssert.h" />
     <ClInclude Include="SlantedPlane.h" />
     <ClInclude Include="SLIC\SLIC.h" />
+    <ClInclude Include="spsstereo\defParameter.h" />
+    <ClInclude Include="spsstereo\SGMStereo.h" />
+    <ClInclude Include="spsstereo\SPSStereo.h" />
     <ClInclude Include="StereoAPI.h" />
     <ClInclude Include="Timer.h" />
   </ItemGroup>
@@ -175,6 +184,18 @@
     <ClCompile Include="ARAP.cpp" />
     <ClCompile Include="BP.cpp" />
     <ClCompile Include="BPOnFactorGraph.cpp" />
+    <ClCompile Include="daisy-1.8.1\src\corecv.cpp" />
+    <ClCompile Include="daisy-1.8.1\src\daisy.cpp" />
+    <ClCompile Include="daisy-1.8.1\src\general.cpp" />
+    <ClCompile Include="daisy-1.8.1\src\image_io_bmp.cpp" />
+    <ClCompile Include="daisy-1.8.1\src\image_io_jpeg.cpp" />
+    <ClCompile Include="daisy-1.8.1\src\image_io_png.cpp" />
+    <ClCompile Include="daisy-1.8.1\src\image_io_pnm.cpp" />
+    <ClCompile Include="daisy-1.8.1\src\image_manipulation.cpp" />
+    <ClCompile Include="daisy-1.8.1\src\interaction.cpp" />
+    <ClCompile Include="daisy-1.8.1\src\main.cpp" />
+    <ClCompile Include="daisy-1.8.1\src\progress_bar.cpp" />
+    <ClCompile Include="EvalParams.h" />
     <ClCompile Include="Evaluation.cpp" />
     <ClCompile Include="GC.cpp" />
     <ClCompile Include="gco-v3.0\example.cpp" />
@@ -184,12 +205,18 @@
     <ClCompile Include="gco-v3.0\maxflow.cpp" />
     <ClCompile Include="GlobalParams.cpp" />
     <ClCompile Include="GroundTruthStatistics.cpp" />
+    <ClCompile Include="ioPfm.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MatchingCost.cpp" />
+    <ClCompile Include="MeanShift\ms.cpp" />
+    <ClCompile Include="MeanShift\msImageProcessor.cpp" />
+    <ClCompile Include="MeanShift\RAList.cpp" />
+    <ClCompile Include="MeanShift\rlist.cpp" />
     <ClCompile Include="MouseCallbacks.cpp" />
     <ClCompile Include="MySLIC.cpp" />
     <ClCompile Include="PatchMatchOnPixels.cpp" />
     <ClCompile Include="PatchMatchOnTriangles.cpp" />
+    <ClCompile Include="PlaneFitting.cpp" />
     <ClCompile Include="Ply.cpp" />
     <ClCompile Include="poly2tri\common\shapes.cc" />
     <ClCompile Include="poly2tri\sweep\advancing_front.cc" />
@@ -197,13 +224,22 @@
     <ClCompile Include="poly2tri\sweep\sweep.cc" />
     <ClCompile Include="poly2tri\sweep\sweep_context.cc" />
     <ClCompile Include="PostProcess.cpp" />
+    <ClCompile Include="Rectification.cpp" />
     <ClCompile Include="SelfSimilarityPropagation.cpp" />
     <ClCompile Include="SGM.cpp" />
     <ClCompile Include="SLIC\SLIC.cpp" />
     <ClCompile Include="Splitting.cpp" />
+    <ClCompile Include="spsstereo\SGMStereo.cpp" />
+    <ClCompile Include="spsstereo\SPSStereo.cpp" />
     <ClCompile Include="StereoFlow.cpp" />
+    <ClCompile Include="test.cpp" />
+    <ClCompile Include="TestEigen.cpp" />
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="Triangulate2D.cpp" />
+    <ClCompile Include="wmf_main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="MeanShift\MSReadme.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

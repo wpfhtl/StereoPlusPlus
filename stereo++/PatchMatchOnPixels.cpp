@@ -79,6 +79,7 @@ static void PropagateAndRandomSearch(int round, int sign, float maxDisp, cv::Poi
 
 static void PatchMatchRandomInit(MCImg<SlantedPlane> &slantedPlanes, cv::Mat &bestCosts, float maxDisp, int sign)
 {
+
 	int numRows = bestCosts.rows, numCols = bestCosts.cols;
 	// Do not use parallelism here, it would results in "regular" random patterns
 	for (int y = 0; y < numRows; y++) {
@@ -93,6 +94,7 @@ static void PatchMatchRandomInit(MCImg<SlantedPlane> &slantedPlanes, cv::Mat &be
 			bestCosts.at<float>(y, x) = PatchMatchSlantedPlaneCost(y, x, slantedPlanes[y][x], sign);
 		}
 	}
+
 }
 
 MCImg<float> PrecomputeSimilarityWeights(cv::Mat &img, int patchRadius, int simGamma)
@@ -159,12 +161,56 @@ void PatchMatchOnPixelPostProcess(MCImg<SlantedPlane> &slantedPlanesL, MCImg<Sla
 	bs::Timer::Toc();
 }
 
-void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR)
+void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR,
+	std::string filePathImageL, std::string filePathImageR, std::string filePathImageOut)
 {
 	int numRows = imL.rows, numCols = imL.cols, numPixels = imL.rows * imL.cols;
 	int numDisps, maxDisp, visualizeScale;
 	SetupStereoParameters(rootFolder, numDisps, maxDisp, visualizeScale);
-	InitGlobalDsiAndSimWeights(imL, imR, numDisps);
+	//InitGlobalDsiAndSimWeights(imL, imR, numDisps);
+
+
+	bs::Timer::Tic("Cost Volume");
+
+
+	double tensorSize = (double)numRows * numCols * numDisps * sizeof(unsigned short) / (double)(1024 * 1024);
+	printf("(numRows, numCols) = (%d, %d)\n", numRows, numCols);
+	printf("tensorSize: %lf\n", tensorSize);
+	printf("numDisps: %d\n", numDisps);
+
+	if (tensorSize > 1000/*rootFolder == "Midd3"*/) {
+		extern cv::Mat gSobelImgL, gSobelImgR, gCensusImgL, gCensusImgR;
+		cv::Mat ComputeCappedSobelImage(cv::Mat &imgIn, int sobelCapValue);
+		gSobelImgL = ComputeCappedSobelImage(imL, 15);
+		gSobelImgR = ComputeCappedSobelImage(imR, 15);
+		gCensusImgL = ComputeCensusImage(imL, 2, 2);
+		gCensusImgR = ComputeCensusImage(imR, 2, 2);
+	}
+	else {
+		extern MCImg<float> gDsiL, gDsiR;
+		gDsiL = MCImg<float>(numRows, numCols, numDisps);
+		gDsiR = MCImg<float>(numRows, numCols, numDisps);
+		void CostVolumeFromYamaguchi(std::string &leftFilePath, std::string &rightFilePath,
+			MCImg<float> &dsiL, MCImg<float> &dsiR, int numDisps);
+		printf("%s\n%s\n", filePathImageL.c_str(), filePathImageR.c_str());
+		CostVolumeFromYamaguchi(filePathImageL, filePathImageR, gDsiL, gDsiR, numDisps);
+
+		//MCImg<float> ComputeBirchfieldTomasiCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign);
+		//MCImg<float> Compute5x5CensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign);
+		//void CombineBirchfieldTomasiAnd5x5Census(MCImg<float> &dsiBT, MCImg<float> &dsiCensus);
+		//MCImg<float> dsiBTL = ComputeBirchfieldTomasiCostVolume(imL, imR, numDisps, -1);
+		//MCImg<float> dsiBTR = ComputeBirchfieldTomasiCostVolume(imR, imL, numDisps, +1);
+		//gDsiL = Compute5x5CensusCostVolume(imL, imR, numDisps, -1);
+		//gDsiR = Compute5x5CensusCostVolume(imR, imL, numDisps, +1);
+		//CombineBirchfieldTomasiAnd5x5Census(dsiBTL, gDsiL);
+		//CombineBirchfieldTomasiAnd5x5Census(dsiBTR, gDsiR);
+	}
+
+	extern cv::Mat gImLabL, gImLabR;
+	gImLabL = imL.clone();
+	gImLabR = imR.clone();
+	bs::Timer::Toc();
+
 
 	MCImg<SlantedPlane> slantedPlanesL(numRows, numCols);
 	MCImg<SlantedPlane> slantedPlanesR(numRows, numCols);
@@ -193,6 +239,7 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 		cv::Mat *bestCosts;
 		PatchMatchOnPixelEvalParams() : slantedPlanes(NULL), bestCosts(NULL) {}
 	};
+
 
 	// Step 2 - Spatial propagation and random search
 	for (int round = 0; round < MAX_PATCHMATCH_ITERS; round++) {
@@ -225,26 +272,46 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 	}
 
 
+	//////////////////////////////////////////////////////////////////////////////
+	//                                   Output
+	//////////////////////////////////////////////////////////////////////////////
+	float upFactor = (rootFolder == "KITTI" ? 256 : 64);
+	cv::Mat SetInvalidDisparityToZeros(cv::Mat &dispL, cv::Mat &validPixelMapL);
+	cv::Mat CrossCheck(cv::Mat &dispL, cv::Mat &dispR, int sign, float thresh = 1.f);
+	cv::Mat validPixelL = CrossCheck(dispL, dispR, -1, 1.f);
+	cv::Mat validPixelR = CrossCheck(dispR, dispL, +1, 1.f);
+	cv::Mat dispCrossCheckedL = SetInvalidDisparityToZeros(dispL, validPixelL);
+	cv::Mat dispCrossCheckedR = SetInvalidDisparityToZeros(dispR, validPixelR);
+
 	// Step 3 - Cross check and post-process
-	PatchMatchOnPixelPostProcess(slantedPlanesL, slantedPlanesR, imL, imR, dispL, dispR);
-	PatchMatchOnPixelEvalParams evalParams;
-	evalParams.slantedPlanes = &slantedPlanesL;
-	evalParams.bestCosts = &bestCostsL;
-	EvaluateDisparity(rootFolder, dispL, 0.5f, &evalParams, "OnMousePatchMatchOnPixels");
+	cv::Mat dispWmfL = dispL.clone();
+	cv::Mat dispWmfR = dispR.clone();
+	PatchMatchOnPixelPostProcess(slantedPlanesL, slantedPlanesR, imL, imR, dispWmfL, dispWmfR);
 
-	slantedPlanesL.SaveToBinaryFile("d:/" + rootFolder + "SlantedPlanesL.bin");
-	slantedPlanesR.SaveToBinaryFile("d:/" + rootFolder + "SlantedPlanesR.bin");
+	dispL.convertTo(dispL, CV_16UC1, upFactor);
+	dispR.convertTo(dispR, CV_16UC1, upFactor);
+	dispCrossCheckedL.convertTo(dispCrossCheckedL, CV_16UC1, upFactor);
+	dispCrossCheckedR.convertTo(dispCrossCheckedR, CV_16UC1, upFactor);
+	dispWmfL.convertTo(dispWmfL, CV_16UC1, upFactor);
+	dispWmfR.convertTo(dispWmfR, CV_16UC1, upFactor);
 
-	cv::Mat dispImgL(numRows, numCols, CV_8UC3);
-	for (int y = 0; y < numRows; y++) {
-		for (int x = 0; x < numCols; x++) {
-			unsigned char d = visualizeScale * dispL.at<float>(y, x) + 0.5f;
-			dispImgL.at<cv::Vec3b>(y, x) = cv::Vec3b(d, d, d);
-		}
-	}
+	cv::imwrite(filePathImageOut + "_dispL.png", dispL);
+	cv::imwrite(filePathImageOut + "_dispR.png", dispR);
+	cv::imwrite(filePathImageOut + "_dispCrossCheckedL.png", dispCrossCheckedL);
+	cv::imwrite(filePathImageOut + "_dispCrossCheckedR.png", dispCrossCheckedR);
+	cv::imwrite(filePathImageOut + "_wmfL.png", dispWmfL);
+	cv::imwrite(filePathImageOut + "_wmfR.png", dispWmfR);
 
-	cv::imwrite("d:/data/stereo/" + rootFolder + "/PatchMatchOnPixel_dispL.png", dispImgL);
-	cv::imwrite("d:/data/stereo/" + rootFolder + "/PatchMatchOnPixel_dispR.png", visualizeScale * dispR);
+	//PatchMatchOnPixelEvalParams evalParams;
+	//evalParams.slantedPlanes = &slantedPlanesL;
+	//evalParams.bestCosts = &bestCostsL;
+	//EvaluateDisparity(rootFolder, dispL, 0.5f, &evalParams, "OnMousePatchMatchOnPixels");
+
+	//slantedPlanesL.SaveToBinaryFile("d:/" + rootFolder + "SlantedPlanesL.bin");
+	//slantedPlanesR.SaveToBinaryFile("d:/" + rootFolder + "SlantedPlanesR.bin");
+
+	//cv::imwrite("d:/data/stereo/" + rootFolder + "/PatchMatchOnPixel_dispL.png", dispImgL);
+	//cv::imwrite("d:/data/stereo/" + rootFolder + "/PatchMatchOnPixel_dispR.png", visualizeScale * dispR);
 }
 
 void TestPatchMatchOnPixels()
@@ -255,5 +322,5 @@ void TestPatchMatchOnPixels()
 	cv::Mat imR = cv::imread("D:/data/stereo/" + rootFolder + "/im6.png");
 	
 	cv::Mat dispL, dispR;
-	RunPatchMatchOnPixels(ROOTFOLDER, imL, imR, dispL, dispR);
+	RunPatchMatchOnPixels(ROOTFOLDER, imL, imR, dispL, dispR, "s", "s", "s");
 }

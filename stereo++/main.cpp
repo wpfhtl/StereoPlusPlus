@@ -3,8 +3,11 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include <iostream>
+#include <string>
+#include <sstream>
 
 #include "StereoAPI.h"
+#include "Timer.h"
 
 #ifdef _DEBUG
 #pragma comment(lib, "opencv_core248d.lib")
@@ -14,6 +17,7 @@
 #pragma comment(lib, "opencv_calib3d248d.lib")
 #pragma comment(lib, "opencv_video248d.lib")
 #pragma comment(lib, "opencv_flann248d.lib")
+#pragma comment(lib, "opencv_nonfree248d.lib")
 #else
 #pragma comment(lib, "opencv_core248.lib")
 #pragma comment(lib, "opencv_highgui248.lib")
@@ -22,35 +26,164 @@
 #pragma comment(lib, "opencv_calib3d248.lib")
 #pragma comment(lib, "opencv_video248.lib")
 #pragma comment(lib, "opencv_flann248.lib")
+#pragma comment(lib, "opencv_nonfree248.lib")
 #endif
 
 
 
-//int main(int argc, char **argv)
-//{
-//
-//	if (argc != 4) {
-//		printf("usage SGM.exe filePathImL filePathImR filePathDispOut\n");
-//		return -1;
-//	}
-//
-//	cv::Mat imL = cv::imread(argv[1]);
-//	cv::Mat imR = cv::imread(argv[2]);
-//	void RunCSGM(std::string rootFolder, cv::Mat &imL, cv::Mat &imR,
-//		cv::Mat &dispL, cv::Mat &dispR, cv::Mat &validPixelMapL, cv::Mat &validPixelMapR);
-//	cv::Mat dispL, dispR, validPixelL, validPixelR;
-//	RunCSGM("KITTI", imL, imR, dispL, dispR, validPixelL, validPixelR);
-//	dispL *= 256.0;
-//	dispL.convertTo(dispL, CV_16UC1);
-//	cv::imwrite(argv[3], dispL);
-//
-//	return 0;
-//}
 
+std::vector<std::string> &split(const std::string &s, char delim, std::vector<std::string> &elems) {
+	std::stringstream ss(s);
+	std::string item;
+	while (std::getline(ss, item, delim)) {
+		elems.push_back(item);
+	}
+	return elems;
+}
 
+std::vector<std::string> split(const std::string &s, char delim) {
+	std::vector<std::string> elems;
+	split(s, delim, elems);
+	return elems;
+}
 
+int ReadCalibFile(std::string filePath)
+{
+	FILE *fid = fopen(filePath.c_str(), "r");
+	char lineBuf[1024];
+	char *line;
+	int numDisps = -1;
+
+	while ((line = fgets(lineBuf, 1023, fid)) != NULL) {
+		std::vector<std::string> tokens = split(line, '=');
+		if (tokens.size() > 0 && tokens[0] == "ndisp") {
+			numDisps = atoi(tokens[1].c_str());
+			break;
+		}
+	}
+	fclose(fid);
+
+	if (numDisps == -1) {
+		printf("Fail to read calib file, exiting...\n");
+		exit(-1);
+	}
+	
+	return numDisps;
+}
+
+int main(int argc, char **argv)
+{
+	if (argc < 2) {
+		printf("usage: .exe Midd3 midd3Resolution midd3TestCaseId numRegions DO_EVAL VISUALIZE_EVAL outImagePath\n");
+		printf("usage: .exe Midd3 kittiTestCaseId numRegions DO_EVAL VISUALIZE_EVAL outImagePath [leftOraclePath rightOraclePath]\n");
+		exit(-1);
+	}
+
+	extern int DO_EVAL;
+	extern int VISUALIZE_EVAL;
+	extern int NUM_PREFERED_REGIONS;;
+	extern int gNumDisps;
+	std::string filePathImageL, filePathImageR, filePathOutImage;
+
+	std::string benchmark = argv[1];
+	if (benchmark == "Midd3") {
+		extern std::string midd3Resolution;
+		extern std::string midd3TestCaseId;
+
+		midd3Resolution			= argv[2];
+		midd3TestCaseId			= argv[3];
+		NUM_PREFERED_REGIONS	= atoi(argv[4]);
+		DO_EVAL					= atoi(argv[5]);
+		VISUALIZE_EVAL			= atoi(argv[6]);
+		filePathOutImage		= argv[7];
+		filePathImageL = "D:\\data\\MiddEval3\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\im0.png";
+		filePathImageR = "D:\\data\\MiddEval3\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\im1_rectified.png";
+
+		gNumDisps = ReadCalibFile("D:\\data\\MiddEval3\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\calib.txt");
+	}
+	if (benchmark == "KITTI") {
+		extern std::string kittiTestCaseId;
+
+		kittiTestCaseId			= argv[2];
+		NUM_PREFERED_REGIONS	= atoi(argv[3]);
+		DO_EVAL					= atoi(argv[4]);
+		VISUALIZE_EVAL			= atoi(argv[5]);
+		filePathOutImage		= argv[6];
+		if (argc == 9) {
+			extern std::string gFilePathOracleL, gFilePathOracleR;
+			gFilePathOracleL	= argv[7];
+			gFilePathOracleR	= argv[8];
+		}
+		filePathImageL = "D:\\data\\KITTI\\training\\colored_0\\" + kittiTestCaseId + ".png";
+		filePathImageR = "D:\\data\\KITTI\\training\\colored_1\\" + kittiTestCaseId + ".png";
+
+		gNumDisps = 256;
+	}
+
+	
+	cv::Mat imL = cv::imread(filePathImageL);
+	cv::Mat imR = cv::imread(filePathImageR);
+	cv::Mat dispL, dispR;
 
 #if 1
+	void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR,
+		std::string filePathImageL, std::string filePathImageR, std::string filePathOutImage);
+
+	bs::Timer::Tic("ARAP");
+	RunARAP(benchmark, imL, imR, dispL, dispR, filePathImageL, filePathImageR, filePathOutImage);
+	bs::Timer::Toc();
+#endif
+
+#if 0
+	void YamaguchiSGM(std::string benchmark, std::string filePathImageL, std::string filePathImageR, std::string filePathImageOut);
+	bs::Timer::Tic("YamaguchiSGM");
+	YamaguchiSGM(benchmark, filePathImageL, filePathImageR, filePathOutImage);
+	bs::Timer::Toc();
+#endif 
+
+#if 0
+	void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR, 
+		std::string filePathImageL, std::string filePathImageR, std::string filePathOutImage);
+	bs::Timer::Tic("PatchMatchOnPixels");
+	RunPatchMatchOnPixels(benchmark, imL, imR, dispL, dispR, filePathImageL, filePathImageR, filePathOutImage);
+	bs::Timer::Toc();
+#endif 
+
+#if 0
+	extern std::string midd3TestCaseId;
+	std::string filePathDispL = "D:\\data\\MiddEval3\\myresults\\PatchMatchOnPixels\\trainingH\\" + midd3TestCaseId + ".png_dispL.png";
+	std::string filePathDispR = "D:\\data\\MiddEval3\\myresults\\PatchMatchOnPixels\\trainingH\\" + midd3TestCaseId + ".png_dispR.png";
+	dispL = cv::imread(filePathDispL, CV_LOAD_IMAGE_UNCHANGED);
+	dispR = cv::imread(filePathDispR, CV_LOAD_IMAGE_UNCHANGED);
+
+	dispL.convertTo(dispL, CV_32FC1, 1.f / 64.f);
+	dispR.convertTo(dispR, CV_32FC1, 1.f / 64.f);
+
+	cv::Mat validMapL = CrossCheck(dispL, dispR, -1, 1.f);
+	void FastWeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixelMap, cv::Mat &img);
+	bs::Timer::Tic("wmf");
+	FastWeightedMedianFilterInvalidPixels(dispL, validMapL, imL);
+	bs::Timer::Toc();
+
+	std::string filePathWmfNewL = "D:\\data\\MiddEval3\\myresults\\PatchMatchOnPixels\\trainingH\\" + midd3TestCaseId + ".png_wmfNewL.png";
+	dispL.convertTo(dispL, CV_16UC1, 64.f);
+	cv::imwrite(filePathWmfNewL, dispL);
+#endif
+
+#if 0
+	void Rectification(cv::Mat &imL, cv::Mat &imR);
+	Rectification(imL, imR);
+#endif 
+
+}
+
+
+
+
+
+
+
+#if 0
 static void PrintProgramEntryHeader(std::string methodName, int id)
 {
 	printf("\n\n========================================================\n");

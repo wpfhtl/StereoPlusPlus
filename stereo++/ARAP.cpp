@@ -7,9 +7,13 @@
 #include <set>
 #include <string>
 
-#include <Eigen/Dense>
-#include <Eigen/SparseCore>
-#include <Eigen/SparseCholesky>
+#include "Eigen/Dense"
+#include "Eigen/SparseCore"
+#include "Eigen/SparseCholesky"
+#include "Eigen/SparseLU"
+#include "Eigen/SparseQR"
+#include "Eigen/IterativeLinearSolvers"
+//#include "Eigen/Core"
 
 #include "StereoAPI.h"
 #include "SlantedPlane.h"
@@ -19,18 +23,13 @@
 
 
 
-struct ARAPEvalParams {
-	int numRows, numCols;
-	cv::Mat *labelMap;
-	cv::Mat *confidenceImg;
-	std::vector<cv::Point2f> *baryCenters;
-	std::vector<cv::Vec3f> *n;
-	std::vector<float> *u;
-	std::vector<std::vector<int>> *nbGraph;
-	std::vector<std::vector<cv::Point2i>> *segPixelLists;
-	ARAPEvalParams() : numRows(0), numCols(0), labelMap(0), baryCenters(0),
-		n(0), u(0), nbGraph(0), segPixelLists(0), confidenceImg(0) {}
-};
+#include "png++/png.hpp"
+#include "spsstereo/SGMStereo.h"
+#include "spsstereo/SPSStereo.h"
+#include "spsstereo/defParameter.h"
+#include "EvalParams.h"
+
+
 
 static ARAPEvalParams evalParams;
 
@@ -204,7 +203,8 @@ static void ConstructBaryCentersAndPixelLists(int numSegs, cv::Mat &labelMap,
 #endif
 #if 0
 	cv::Point2f oldEndPt(0, 0);
-	int stepSz = numCols / 8;
+	/*int stepSz = numCols / 8;*/
+	int stepSz = 1;
 	for (int i = 0; i < numSegs; i += stepSz) {
 		for (int j = i; j < i + stepSz && j < numSegs; j++) {
 			cv::Point2f newEndPt = baryCenters[j];
@@ -351,13 +351,31 @@ static float ConstrainedPatchMatchCost(float yc, float xc, SlantedPlane &newGues
 	cv::Vec3f &mL, float vL, float maxDisp, float theta, int sign)
 {
 	float dataCost = PatchMatchSlantedPlaneCost(yc + 0.5, xc + 0.5, newGuess, sign);
+	float oracleDiff = 0.f;
+	
+
+	extern cv::Mat gDispSGML, gDispSGMR;
+	cv::Mat &dispSGM = (sign == -1 ? gDispSGML : gDispSGMR);
+	
+	if (!dispSGM.empty()) {
+		if (dispSGM.at<float>(yc, xc) > 0) {
+			oracleDiff = std::min(30.f, std::abs(dispSGM.at<float>(yc, xc) - newGuess.ToDisparity(yc, xc)));
+			oracleDiff *= 25 * 2; // balance the scale of tensor matching cost and oracle matching cost.
+		}
+	}
+	//dataCost = 0.7 * dataCost + 0.3f * oracleDiff;
+
 	cv::Vec3f nL(newGuess.nx, newGuess.ny, newGuess.nz);
 	float uL = newGuess.ToDisparity(yc, xc) / maxDisp;
 	vL /= maxDisp;
 	//float smoothCost = (nL - mL).dot(nL - mL);// +(uL - vL) * (uL - vL);
-	float nx = nL[0], ny = nL[1], mx = mL[0], my = mL[1];
-	float smoothCost = (nx - mx) * (nx - mx) + (ny - my) * (ny - my);
-
+	float nx = nL[0], ny = nL[1], nz = nL[2], mx = mL[0], my = mL[1], mz = mL[2];
+	float normalizedDispDiff = (uL - vL) / maxDisp;
+	normalizedDispDiff *= normalizedDispDiff;
+	float smoothCost = (nx - mx) * (nx - mx) + (ny - my) * (ny - my)
+		+ (nz - mz) * (nz - mz) + normalizedDispDiff;
+	smoothCost *= maxDisp * maxDisp;
+	
 	extern float ARAP_LAMBDA;
 	extern float ARAP_SIGMA;
 	return ARAP_LAMBDA * dataCost + 0.5 * ARAP_SIGMA * theta * smoothCost;
@@ -379,6 +397,12 @@ static void PropagateAndRandomSearch(int id, int sign, float maxDisp, float thet
 {
 	float y = srcPos.y;
 	float x = srcPos.x;
+	//if (gSmooth < 0.5) {
+	//	gSmooth = 0;
+	//}
+	//if (gSmooth > 0.9) {
+	//	gSmooth *= 10;
+	//}
 
 	// Spatial propgation
 	std::vector<int> &nbIds = nbGraph[id];
@@ -390,7 +414,7 @@ static void PropagateAndRandomSearch(int id, int sign, float maxDisp, float thet
 
 	// Random search
 
-	if (1 && (y > 330)) {
+	if (0 && (y > 330)) {
 		// Special treament for ground planes
 		for (int retry = 0; retry < 10; retry++) {
 			float curDisp = slantedPlanes[id].ToDisparity(y, x);
@@ -400,16 +424,27 @@ static void PropagateAndRandomSearch(int id, int sign, float maxDisp, float thet
 		}
 	}
 
-	float zRadius = maxDisp / 2.f;
-	float nRadius = 1.f;
-	while (zRadius >= 0.1f) {
-		SlantedPlane newGuess = SlantedPlane::ConstructFromRandomPertube(slantedPlanes[id], y, x, nRadius, zRadius);
-		ImproveGuess(y, x, slantedPlanes[id], newGuess, bestCosts[id], 
-			mL[id], vL[id], maxDisp, theta * gSmooth, sign);
-	
-		zRadius /= 2.f;
-		nRadius /= 2.f;
+	for (int retry = 0; retry < 5; retry++) {
+		float zRadius = maxDisp / 2.f;
+		float nRadius = 1.f;
+		while (zRadius >= 0.1f) {
+			for (int retry = 0; retry < 1; retry++) {
+				SlantedPlane newGuess = SlantedPlane::ConstructFromRandomPertube(slantedPlanes[id], y, x, nRadius, zRadius);
+				ImproveGuess(y, x, slantedPlanes[id], newGuess, bestCosts[id],
+					mL[id], vL[id], maxDisp, theta * gSmooth, sign);
+			}
+
+			zRadius /= 2.f;
+			nRadius /= 2.f;
+		}
 	}
+	
+
+	//for (int retry = 0; retry < 10; retry++) {
+	//	SlantedPlane newGuess = SlantedPlane::ConstructFromRandomInit(y, x, maxDisp);
+	//	ImproveGuess(y, x, slantedPlanes[id], newGuess, bestCosts[id],
+	//		mL[id], vL[id], maxDisp, theta * gSmooth, sign);
+	//}
 
 	
 }
@@ -419,6 +454,7 @@ static void ConstrainedPatchMatchOnSegments(int sign, float theta, float maxDisp
 	std::vector<float>& gSmoothL, std::vector<cv::Point2f> &baryCentersL, std::vector<std::vector<int>> &nbGraphL,
 	std::vector<std::vector<float>> &nbSimWeightsL, std::vector<std::vector<cv::Point2i>> &segPixelListsL)
 {
+	printf("maxDisp = %f\n", maxDisp);
 	// Assemble the n, d to SlantedPlane
 	// Random init if first iter
 	int numSegsL = baryCentersL.size();
@@ -451,8 +487,10 @@ static void ConstrainedPatchMatchOnSegments(int sign, float theta, float maxDisp
 		idListL[i] = i;
 	}
 
+	bs::Timer::Tic();
 	for (int round = 0; round < maxIters; round++) {
 		printf("ConstrainedPatchMatchOnSegments round %d ...\n", round);
+		#pragma omp parallel for
 		for (int i = 0; i < numSegsL; i++) {
 			int id = idListL[i];
 			PropagateAndRandomSearch(id, sign, maxDisp, theta, gSmoothL[id], 
@@ -460,6 +498,7 @@ static void ConstrainedPatchMatchOnSegments(int sign, float theta, float maxDisp
 		}
 		std::reverse(idListL.begin(), idListL.end());
 	}
+	bs::Timer::Toc();
 
 
 	// Deassemble SlantedPlane to n, d
@@ -470,17 +509,25 @@ static void ConstrainedPatchMatchOnSegments(int sign, float theta, float maxDisp
 	}
 }
 
-static void SolveARAPSmoothness(float theta, std::vector<float> &confidence,
+
+#if 0
+static void SolveARAPSmoothness(float theta, std::vector<float> &confidence, int maxDisp,
 	std::vector<std::vector<int>> &nbGraph, std::vector<std::vector<float>> &nbSimWeights, 
-	std::vector<cv::Vec3f> &n, std::vector<float> &u, std::vector<cv::Vec3f> &m, std::vector<float> &v)
+	std::vector<cv::Vec3f> &n, std::vector<float> &u, std::vector<cv::Vec3f> &m, std::vector<float> &v,
+	std::vector<cv::Point2f> &baryCenters)
 {
-	// This function solves the following sparse lienar system
-	//   A_{NxN} * X = b_{Nx4}
+	// This function minimize the following objective fucntioin w.r.t. m and v
+	//     \min 0.5 * \sum_{i,j} w_ij*(v_i - v_j)^2
+	//          + 0.5*\theta*\sigma * \sum_{i} G_i*(v_i - u_i)^2
+	// by solving the following linear system
+	//     A_{NxN} * X = b_{Nx4}
 	// where 
-	//   A_ii = \theta_i + \lambda * \sum_j w_ij,
-	//	 A_ij = -\lambda * w_ij
-	//	 b_i  = \theta_i * n_i
-	// N is the number of segments, w_ij is the similarity weights between neighboring segments.
+	//     A_ii = G_i*\theta*\sigma + \sum_j w_ij,
+	//	   A_ij = -w_ij
+	//	   b_i  = G_i*\theta*\sigma*u_i
+	// N is the number of segments, 
+	// w_ij is the similarity weights between neighboring segments,
+	// G_i is the confidence of the segment
 	printf("SolveARAPSmoothness...\n");
 	extern float ARAP_SIGMA;
 
@@ -490,12 +537,16 @@ static void SolveARAPSmoothness(float theta, std::vector<float> &confidence,
 		numNonZeroEntries += 1 + nbGraph[id].size();
 	}
 
-	std::vector<float> g = confidence;
-	// Give the data's confidence a 0.1 offset
-	//for (int i = 0; i < g.size(); i++) {
-	//	g[i] += 0.1f;
-	//}
-	std::vector<Eigen::Triplet<float>> entries;
+	// Set low confidence value to zero, 
+	// to eleminate the "bad" contribution of corresponding segments
+	std::vector<float> G = confidence;
+	for (int i = 0; i < G.size(); i++) {
+		if (G[i] < 0.5) {
+			//G[i] = 0;
+		}
+	}
+
+	std::vector<Eigen::Triplet<double>> entries;
 	entries.reserve(numNonZeroEntries);
 	for (int id = 0; id < numSegs; id++) {
 		float wsum = 0.f;
@@ -505,27 +556,33 @@ static void SolveARAPSmoothness(float theta, std::vector<float> &confidence,
 		for (int k = 0; k < nbInds.size(); k++) {
 			int i = id;
 			int j = nbInds[k];
-			entries.push_back(Eigen::Triplet<float>(i, j, -nbWeights[k]));
+			entries.push_back(Eigen::Triplet<double>(i, j, -nbWeights[k]));
 			wsum += nbWeights[k];
 		}
-		entries.push_back(Eigen::Triplet<float>(id, id, ARAP_SIGMA * theta * g[id] + wsum));
+		entries.push_back(Eigen::Triplet<double>(id, id, G[id] * theta * ARAP_SIGMA + wsum));
 	}
 
 
 	// FIXME: you have to make sure the matrix is store in row-major order, to avoid any potential risk.
 	// In defense: I think no matter what storing order is used, the accessing is still (y, x).
-	Eigen::MatrixXf b(numSegs, 4);
+	Eigen::MatrixXd b(numSegs, 4);
 	for (int id = 0; id < numSegs; id++) {
-		b.coeffRef(id, 0) = ARAP_SIGMA * theta * g[id] * n[id][0];
-		b.coeffRef(id, 1) = ARAP_SIGMA * theta * g[id] * n[id][1];
-		b.coeffRef(id, 2) = ARAP_SIGMA * theta * g[id] * n[id][2];
-		b.coeffRef(id, 3) = ARAP_SIGMA * theta * g[id] * u[id];
+		b.coeffRef(id, 0) = ARAP_SIGMA * theta * G[id] * n[id][0];
+		b.coeffRef(id, 1) = ARAP_SIGMA * theta * G[id] * n[id][1];
+		b.coeffRef(id, 2) = ARAP_SIGMA * theta * G[id] * n[id][2];
+		b.coeffRef(id, 3) = ARAP_SIGMA * theta * G[id] * (u[id] / maxDisp);
 	}
 
-	Eigen::SparseMatrix<float> A(numSegs, numSegs);
+	Eigen::SparseMatrix<double> A(numSegs, numSegs);
 	A.setFromTriplets(entries.begin(), entries.end());
-	Eigen::SimplicialCholesky<Eigen::SparseMatrix<float>> chol(A);
-	Eigen::MatrixXf M = chol.solve(b);
+	A.makeCompressed();
+	Eigen::SimplicialCholesky<Eigen::SparseMatrix<double>> chol(A);
+	Eigen::MatrixXd M = chol.solve(b);
+
+
+
+	//Eigen::SparseLU<Eigen::SparseMatrix<float>> lu(A);
+	//Eigen::MatrixXf M = lu.solve(b);
 
 	for (int id = 0; id < numSegs; id++) {
 		// The solution of the sparse system does not necessarily satisfy the 
@@ -534,7 +591,7 @@ static void SolveARAPSmoothness(float theta, std::vector<float> &confidence,
 		m[id][0] = M.coeffRef(id, 0);
 		m[id][1] = M.coeffRef(id, 1);
 		m[id][2] = M.coeffRef(id, 2);
-		v[id]    = M.coeffRef(id, 3);
+		v[id]    = M.coeffRef(id, 3) * maxDisp;
 		m[id] = cv::normalize(m[id]);
 		// Check for NaN values.
 		if (isnan(m[id][0]) || isnan(m[id][1]) || isnan(m[id][2])) {
@@ -542,6 +599,181 @@ static void SolveARAPSmoothness(float theta, std::vector<float> &confidence,
 		}
 	}
 }
+#else 
+static cv::Vec3f NormalizeVec3f(cv::Vec3f &v)
+{
+	float len = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+	return cv::Vec3f(v[0] / len, v[1] / len, v[2] / len);
+}
+
+static void SolveARAPSmoothness(float theta, std::vector<float> &confidence, int maxDisp,
+	std::vector<std::vector<int>> &nbGraph, std::vector<std::vector<float>> &nbSimWeights,
+	std::vector<cv::Vec3f> &n, std::vector<float> &u, std::vector<cv::Vec3f> &m, std::vector<float> &v,
+	std::vector<cv::Point2f> &baryCenters)
+{
+	// This function minimize the following objective fucntioin w.r.t. m and v
+	//     \min 0.5 * \sum_{i,j} w_ij*(v_i - v_j)^2
+	//          + 0.5*\theta*\sigma * \sum_{i} G_i*(v_i - u_i)^2
+	// by solving the following linear system
+	//     A_{NxN} * X = b_{Nx4}
+	// where 
+	//     A_ii = G_i*\theta*\sigma + \sum_j w_ij,
+	//	   A_ij = -w_ij
+	//	   b_i  = G_i*\theta*\sigma*u_i
+	// N is the number of segments, 
+	// w_ij is the similarity weights between neighboring segments,
+	// G_i is the confidence of the segment
+	printf("SolveARAPSmoothness...\n");
+	printf("THETA = %f\n", theta);
+	extern float ARAP_SIGMA;
+
+	int numSegs = nbGraph.size();
+	int numNonZeroEntries = 0;
+	float avgNumNbs = 0.f;
+	for (int id = 0; id < numSegs; id++) {
+		numNonZeroEntries += 3 + 16 * nbGraph[id].size();
+		avgNumNbs += nbGraph[id].size();
+	}
+	avgNumNbs /= numSegs;
+	printf("avgNumNbs = %.2f\n", avgNumNbs);
+
+	// Set low confidence value to zero, 
+	// to eleminate the "bad" contribution of corresponding segments
+	std::vector<float> G = confidence;
+	for (int i = 0; i < G.size(); i++) {
+		if (G[i] < 0.5) {
+			G[i] = 0;
+		}
+		//if (G[i] > 0.8) {
+		//	G[i] *= 10;
+		//}
+	}
+
+	/*
+		In defense second order cost, derivatives calculated by MATLAB
+	Run:
+		diati = (-nxi/nzi)*xi + (-nyi/nzi)*yi + (nxi*xi + nyi*yi + nzi*di)/nzi;
+		djati = (-nxj/nzj)*xi + (-nyj/nzj)*yi + (nxj*xj + nyj*yj + nzj*dj)/nzj;
+
+		f1 = 0.5*(diati-djati)^2;
+
+		df1 = sym('f1', [6 1]);
+		df1(1) = simplify(diff(f1, 'nxi'));
+		df1(2) = simplify(diff(f1, 'nyi'));
+		df1(3) = simplify(diff(f1, 'di'));
+		df1(4) = simplify(diff(f1, 'nxj'));
+		df1(5) = simplify(diff(f1, 'nyj'));
+		df1(6) = simplify(diff(f1, 'dj'));
+
+	Result:
+	df1 =
+		0
+		0
+		di - dj + nxj*xi - nxj*xj + nyj*yi - nyj*yj
+		(xi - xj)*(di - dj + nxj*xi - nxj*xj + nyj*yi - nyj*yj)
+		(yi - yj)*(di - dj + nxj*xi - nxj*xj + nyj*yi - nyj*yj)
+		dj - di - nxj*xi + nxj*xj - nyj*yi + nyj*yj
+	*/
+	const float maxDispSquared = maxDisp * maxDisp;
+	std::vector<Eigen::Triplet<double>> entries;
+	entries.reserve(numNonZeroEntries);
+	for (int id = 0; id < numSegs; id++) {
+		float wsum = 0.f;
+		std::vector<int> &nbInds = nbGraph[id];
+		std::vector<float> &nbWeights = nbSimWeights[id];
+
+		for (int k = 0; k < nbInds.size(); k++) {
+			//printf("sdfasfsadfsdf\n");
+			int i = id;
+			int j = nbInds[k];
+			float xi = baryCenters[i].x;
+			float yi = baryCenters[i].y;
+			float xj = baryCenters[j].x;
+			float yj = baryCenters[j].y;
+			float wij = nbWeights[k];
+			wij = (double)wij / maxDispSquared;
+			// \paritial f1 \partial di
+			entries.push_back(Eigen::Triplet<double>(3 * i + 2, 3 * j + 0, (xi - xj) * wij));
+			entries.push_back(Eigen::Triplet<double>(3 * i + 2, 3 * j + 1, (yi - yj) * wij));
+			entries.push_back(Eigen::Triplet<double>(3 * i + 2, 3 * j + 2, -1 * wij));
+			entries.push_back(Eigen::Triplet<double>(3 * i + 2, 3 * i + 2, +1 * wij));
+			// \paritial f1 \partial nxj
+			entries.push_back(Eigen::Triplet<double>(3 * j + 0, 3 * j + 0, (xi - xj)*(xi - xj) * wij));
+			entries.push_back(Eigen::Triplet<double>(3 * j + 0, 3 * j + 1, (xi - xj)*(yi - yj) * wij));
+			entries.push_back(Eigen::Triplet<double>(3 * j + 0, 3 * j + 2, (xi - xj)*(-1) * wij));
+			entries.push_back(Eigen::Triplet<double>(3 * j + 0, 3 * i + 2, (xi - xj)*(+1) * wij));
+			// \paritial f1 \partial nyj
+			entries.push_back(Eigen::Triplet<double>(3 * j + 1, 3 * j + 0, (yi - yj)*(xi - xj) * wij));
+			entries.push_back(Eigen::Triplet<double>(3 * j + 1, 3 * j + 1, (yi - yj)*(yi - yj) * wij));
+			entries.push_back(Eigen::Triplet<double>(3 * j + 1, 3 * j + 2, (yi - yj)*(-1) * wij));
+			entries.push_back(Eigen::Triplet<double>(3 * j + 1, 3 * i + 2, (yi - yj)*(+1) * wij));
+			// \paritial f1 \partial dj
+			entries.push_back(Eigen::Triplet<double>(3 * j + 2, 3 * j + 0, -(xi - xj) * wij));
+			entries.push_back(Eigen::Triplet<double>(3 * j + 2, 3 * j + 1, -(yi - yj) * wij));
+			entries.push_back(Eigen::Triplet<double>(3 * j + 2, 3 * j + 2, +1 * wij));
+			entries.push_back(Eigen::Triplet<double>(3 * j + 2, 3 * i + 2, -1 * wij));
+
+		}
+		entries.push_back(Eigen::Triplet<double>(3 * id + 0, 3 * id + 0, avgNumNbs * G[id] * theta * ARAP_SIGMA/**maxDispSquared*/));
+		entries.push_back(Eigen::Triplet<double>(3 * id + 1, 3 * id + 1, avgNumNbs * G[id] * theta * ARAP_SIGMA/**maxDispSquared*/));
+		entries.push_back(Eigen::Triplet<double>(3 * id + 2, 3 * id + 2, avgNumNbs * G[id] * theta * ARAP_SIGMA / maxDispSquared));
+	}
+
+	// Re-parameterize n to (nx, ny, 1) form
+	for (int i = 0; i < n.size(); i++) {
+		if (n[i][2] < 0.5) {
+			printf("NORMAL nz component too small! Forget to ban such normal in PatchMatch?\n");
+			exit(-1);
+		}
+		n[i][0] /= n[i][2];
+		n[i][1] /= n[i][2];
+		n[i][2] = 1;
+	}
+
+	// FIXME: you have to make sure the matrix is store in row-major order, to avoid any potential risk.
+	// In defense: I think no matter what storing order is used, the accessing is still (y, x).
+	Eigen::MatrixXd b(3 * numSegs, 1);
+	for (int id = 0; id < numSegs; id++) {
+		// Don't forget to deal with the disparity scale
+		// Don't forget to deal with the re-parameterization of m and n
+		b.coeffRef(3 * id + 0, 0) = avgNumNbs * ARAP_SIGMA * theta * G[id] * n[id][0] /** maxDispSquared*/;
+		b.coeffRef(3 * id + 1, 0) = avgNumNbs * ARAP_SIGMA * theta * G[id] * n[id][1] /** maxDispSquared*/;
+		b.coeffRef(3 * id + 2, 0) = avgNumNbs * ARAP_SIGMA * theta * G[id] * u[id] / maxDispSquared;
+	}
+
+	Eigen::SparseMatrix<double> A(3 * numSegs, 3 * numSegs);
+	A.setFromTriplets(entries.begin(), entries.end());
+	A.makeCompressed();
+	Eigen::SimplicialCholesky<Eigen::SparseMatrix<double>> chol(A);
+	Eigen::MatrixXd M = chol.solve(b);
+	//Eigen::SparseLU<Eigen::SparseMatrix<double>> lu(A);
+	//Eigen::MatrixXd M = lu.solve(b);
+	//Eigen::BiCGSTAB<Eigen::SparseMatrix<double>> bi;
+	//bi.compute(A);
+	//Eigen::MatrixXd M = bi.solve(b);
+	 
+
+	for (int id = 0; id < numSegs; id++) {
+		// The solution of the sparse system does not necessarily satisfy the 
+		// unit-norm constraint. You should either normalize (nx,ny,nz) or Get nz by
+		// sqrt(1-nx*nx-ny*ny)
+		m[id][0] = M.coeffRef(3 * id + 0, 0);
+		m[id][1] = M.coeffRef(3 * id + 1, 0);
+		m[id][2] = 1.f;
+		v[id] = M.coeffRef(3 * id + 2, 0);	// *maxDisp;
+		cv::Vec3f oldm = m[id];
+		m[id] = NormalizeVec3f(m[id]);
+		//m[id] = cv::normalize(m[id],);
+
+		// Check for NaN values.
+		if (isnan(m[id][0]) || isnan(m[id][1]) || isnan(m[id][2])) {
+			printf("\nNaN value detected!!!!!!\n\n");
+			std::cout << "oldm = " << oldm << "\n";
+		}
+	}
+}
+#endif
+
 
 static void ARAPPostProcess(int numRows, int numCols, std::vector<cv::Vec3f> &nL, std::vector<cv::Vec3f> &nR, 
 	std::vector<float> &uL, std::vector<float> &uR, std::vector<float> &gL, std::vector<float> &gR,
@@ -557,8 +789,8 @@ static void ARAPPostProcess(int numRows, int numCols, std::vector<cv::Vec3f> &nL
 	cv::Mat dispL = SegmentLabelToDisparityMap(numRows, numCols, slantedPlanesL, segPixelListsL);
 	cv::Mat dispR = SegmentLabelToDisparityMap(numRows, numCols, slantedPlanesR, segPixelListsR);
 
-	cv::Mat validPixelMapL = CrossCheck(dispL, dispR, -1);
-	cv::Mat validPixelMapR = CrossCheck(dispR, dispL, +1);
+	cv::Mat validPixelMapL = CrossCheck(dispL, dispR, -1, 1.0);
+	cv::Mat validPixelMapR = CrossCheck(dispR, dispL, +1, 1.0);
 
 	gL = DetermineConfidence(validPixelMapL, segPixelListsL);
 	gR = DetermineConfidence(validPixelMapR, segPixelListsR);
@@ -576,11 +808,11 @@ static void ARAPPostProcess(int numRows, int numCols, std::vector<cv::Vec3f> &nL
 	dispL = SegmentLabelToDisparityMap(numRows, numCols, slantedPlanesL, segPixelListsL);
 	dispR = SegmentLabelToDisparityMap(numRows, numCols, slantedPlanesR, segPixelListsR);
 
-	validPixelMapL = CrossCheck(dispL, dispR, -1); 
-	validPixelMapR = CrossCheck(dispR, dispL, +1);
+	validPixelMapL = CrossCheck(dispL, dispR, -1, 1.0); 
+	validPixelMapR = CrossCheck(dispR, dispL, +1, 1.0);
 
-	//gL = DetermineConfidence(validPixelMapL, segPixelListsL);
-	//gR = DetermineConfidence(validPixelMapR, segPixelListsR);
+	gL = DetermineConfidence(validPixelMapL, segPixelListsL);
+	gR = DetermineConfidence(validPixelMapR, segPixelListsR);
 
 	SlantedPlanesToNormalDepth(slantedPlanesL, baryCentersL, nL, uL);
 	SlantedPlanesToNormalDepth(slantedPlanesR, baryCentersR, nR, uR);
@@ -588,7 +820,7 @@ static void ARAPPostProcess(int numRows, int numCols, std::vector<cv::Vec3f> &nL
 	cv::Mat confidenceImgL = DrawSegmentConfidenceMap(numRows, numCols, gL, segPixelListsL);
 	cv::Mat confidenceImgR = DrawSegmentConfidenceMap(numRows, numCols, gR, segPixelListsR);
 	//cv::imshow("confidenceL", confidenceImgL);
-#if 1
+#if 0
 	extern std::string ROOTFOLDER;
 	evalParams.confidenceImg = &confidenceImgL;
 	evalParams.n = &nL;
@@ -597,33 +829,258 @@ static void ARAPPostProcess(int numRows, int numCols, std::vector<cv::Vec3f> &nL
 #endif
 }
 
-static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
+void CostVolumeFromYamaguchi(std::string &leftFilePath, std::string &rightFilePath, 
+	MCImg<float> &dsiL, MCImg<float> &dsiR, int numDisps)
 {
+	extern int SGMSTEREO_DEFAULT_DISPARITY_TOTAL;
+	SGMSTEREO_DEFAULT_DISPARITY_TOTAL = numDisps;
+
+	std::string leftImageFilename = leftFilePath;
+	std::string rightImageFilename = rightFilePath;
+
+	png::image<png::rgb_pixel> leftImage(leftImageFilename);
+	png::image<png::rgb_pixel> rightImage(rightImageFilename);
+
+
+
+	SGMStereo sgm;
+	//sgm.compute(leftImage, rightImage, i);
+	sgm.initialize(leftImage, rightImage);
+	sgm.computeCostImage(leftImage, rightImage);
+	int numRows = dsiL.h, numCols = dsiL.w; //numDisps = dsiL.n;
+	int N = numRows * numCols * numDisps;
+
+	#pragma omp parallel for
+	for (int i = 0; i < N; i++) {
+		dsiL.data[i] = sgm.leftCostImage_[i];
+	}
+	#pragma omp parallel for
+	for (int i = 0; i < N; i++) {
+		dsiR.data[i] = sgm.rightCostImage_[i];
+	}
+
+	sgm.freeDataBuffer();
+}
+
+static std::vector<cv::Vec3b> ComupteSegmentMeanLabColor(cv::Mat &labImg, cv::Mat &labelMap, int numSegs)
+{
+	std::vector<cv::Vec3d> colors(numSegs, cv::Vec3d(0,0,0));
+	std::vector<int> segSizes(numSegs, 0);
+	for (int y = 0; y < labelMap.rows; y++) {
+		for (int x = 0; x < labelMap.cols; x++) {
+			int id = labelMap.at<int>(y, x);
+			segSizes[id]++;
+			colors[id] += labImg.at<cv::Vec3b>(y, x);
+		}
+	}
+	
+	std::vector<cv::Vec3b> results(numSegs);
+	for (int i = 0; i < numSegs; i++) {
+		colors[i] /= (double)segSizes[i];
+		results[i] = colors[i];
+	}
+
+	return results;
+}
+
+cv::Mat SetInvalidDisparityToZeros(cv::Mat &dispL, cv::Mat &validPixelMapL)
+{
+	cv::Mat dispCrossCheckedL = dispL.clone();
+	int numRows = dispL.rows, numCols = dispL.cols;
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			if (!validPixelMapL.at<bool>(y, x)) {
+				dispCrossCheckedL.at<float>(y, x) = 0.f;
+			}
+		}
+	}
+	return dispCrossCheckedL;
+}
+
+static void VisualizeSegmentConfidence(cv::Mat &labelMap,
+	std::vector<std::vector<cv::Point2i>> &segPixelLists, std::vector<float> &confidences)
+{
+	extern int VISUALIZE_EVAL;
+	if (!VISUALIZE_EVAL) {
+		return;
+	}
+	cv::Mat confidenceImg(labelMap.rows, labelMap.cols, CV_8UC3);
+	for (int id = 0; id < confidences.size(); id++) {
+		float confVal = confidences[id];
+		cv::Vec3b color;
+		if (confVal < 0.5) {
+			color = cv::Vec3b(0, 0, 255);
+		}
+		else {
+			unsigned char c = 255 * confVal + 0.5;
+			color = cv::Vec3b(c, c, c);
+		}
+		std::vector<cv::Point2i> &pixelList = segPixelLists[id];
+		for (int i = 0; i < pixelList.size(); i++) {
+			int y = pixelList[i].y;
+			int x = pixelList[i].x;
+			confidenceImg.at<cv::Vec3b>(y, x) = color;
+		}
+	}
+	cv::imshow("confidence image", confidenceImg);
+	cv::waitKey(0);
+}
+
+static void VisualizeSegmengSimilarityWeights(cv::Mat &img, cv::Mat &labelMap,
+	std::vector<std::vector<float>> &nbGraphL, std::vector<std::vector<cv::Point2i>> &segPixelList)
+{
+}
+
+void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR,
+	std::string filePathImageL, std::string filePathImageR, std::string filePathOutImage)
+{
+	//int downFactor = 2;
+	//cv::resize(imL, imL, cv::Size(imL.cols / downFactor, imL.rows / downFactor));
+	//cv::resize(imR, imR, cv::Size(imR.cols / downFactor, imR.rows / downFactor));
+
+
 	int numRows = imL.rows, numCols = imL.cols;
 	int numDisps, maxDisp, visualizeScale;
 	SetupStereoParameters(rootFolder, numDisps, maxDisp, visualizeScale);
-	extern int INTERP_ONLINE;
-	if (INTERP_ONLINE) {
-		InitGlobalColorGradientFeatures(imL, imR);
+
+	printf("rootFolder = %s\n", rootFolder.c_str());
+	printf("numRows = %d\n", numRows);
+	printf("numCols = %d\n", numCols);
+	printf("numDisps = %d\n", numDisps);
+
+	extern std::string gFilePathOracleL, gFilePathOracleR;
+	extern cv::Mat gDispSGML, gDispSGMR;
+
+	std::cout << "gFilePathOracleL:  " << gFilePathOracleL << "\n";
+	std::cout << "gFilePathOracleR:  " << gFilePathOracleR << "\n";
+	if (gFilePathOracleL != "") {
+		gDispSGML = cv::imread(gFilePathOracleL, CV_LOAD_IMAGE_UNCHANGED);
+		gDispSGMR = cv::imread(gFilePathOracleL, CV_LOAD_IMAGE_UNCHANGED);
+		gDispSGML.convertTo(gDispSGML, CV_32FC1, 1.f / 256.f);
+		gDispSGMR.convertTo(gDispSGMR, CV_32FC1, 1.f / 256.f);
+	}
+
+
+	extern cv::Mat gImLabL, gImLabR;
+	gImLabL = imL;
+	gImLabR = imR;
+	//cv::cvtColor(imL, gImLabL, CV_BGR2Lab);
+	//cv::cvtColor(imR, gImLabR, CV_BGR2Lab);
+
+	bs::Timer::Tic("cost volume");
+
+	double tensorSize = (double)numRows * numCols * numDisps * sizeof(float) / (double)(1024 * 1024);
+	printf("(numRows, numCols) = (%d, %d)\n", numRows, numCols);
+	printf("tensorSize: %lf\n", tensorSize);
+	printf("numDisps: %d\n", numDisps);
+	printf("visualizeScale: %d\n", visualizeScale);
+
+
+	extern MCImg<float> gDsiL, gDsiR;
+	if (tensorSize > 1000/*rootFolder == "Midd3"*/) {
+		extern cv::Mat gSobelImgL, gSobelImgR, gCensusImgL, gCensusImgR;
+		cv::Mat ComputeCappedSobelImage(cv::Mat &imgIn, int sobelCapValue);
+		gSobelImgL  = ComputeCappedSobelImage(imL, 15);
+		gSobelImgR  = ComputeCappedSobelImage(imR, 15);
+		gCensusImgL = ComputeCensusImage(imL, 2, 2);
+		gCensusImgR = ComputeCensusImage(imR, 2, 2);
 	}
 	else {
-		InitGlobalDsiAndSimWeights(imL, imR, numDisps);
+		gDsiL = MCImg<float>(numRows, numCols, numDisps);
+		gDsiR = MCImg<float>(numRows, numCols, numDisps);
+		std::cout << filePathImageL << "\n";
+		std::cout << filePathImageR << "\n";
+		CostVolumeFromYamaguchi(filePathImageL, filePathImageR, gDsiL, gDsiR, numDisps);
+
+
+
+		//MCImg<float> ComputeBirchfieldTomasiCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign);
+		//MCImg<float> Compute5x5CensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign);
+		//void CombineBirchfieldTomasiAnd5x5Census(MCImg<float> &dsiBT, MCImg<float> &dsiCensus);
+
+		//MCImg<float> dsiBTL = ComputeBirchfieldTomasiCostVolume(imL, imR, numDisps, -1);
+		//MCImg<float> dsiBTR = ComputeBirchfieldTomasiCostVolume(imR, imL, numDisps, +1);
+		//gDsiL = Compute5x5CensusCostVolume(imL, imR, numDisps, -1);
+		//gDsiR = Compute5x5CensusCostVolume(imR, imL, numDisps, +1);
+		//CombineBirchfieldTomasiAnd5x5Census(dsiBTL, gDsiL);
+		//CombineBirchfieldTomasiAnd5x5Census(dsiBTR, gDsiR);
+
+		//gDsiL = ComputeAdGradientCostVolume(imL, imR, numDisps, -1, 1.f);
+		//gDsiR = ComputeAdGradientCostVolume(imR, imL, numDisps, +1, 1.f);
+		//gDsiL = ComputeAdCensusCostVolume(imL, imR, numDisps, -1, 1.f);
+		//gDsiR = ComputeAdCensusCostVolume(imR, imL, numDisps, +1, 1.f);
+
+		//for (int retry = 0; retry < 200; retry++) {
+		//	int y = rand() % numRows;
+		//	int x = rand() % numCols;
+		//	int d = rand() % numDisps;
+		//	printf("(%4d,%4d,%4d): %.2f\n", y, x, d, gDsiL.get(y, x)[d] / 25.f);
+		//}
+		//cv::waitKey(0);
 	}
+
+	bs::Timer::Toc();
 
 	// Segmentize/Triangulize both views
 	cv::Mat labelMapL, labelMapR, contourImgL, contourImgR;
 	extern int SEGMENT_LEN;
 	//int numPreferedRegions = (numRows * numCols) / (SEGMENT_LEN * SEGMENT_LEN);
 	//int numPreferedRegions = (numCols / 8 + 1) * (numRows / 8 + 1);
-	int numPreferedRegions = 1000;
-	float compactness = 20.f;
+	extern int NUM_PREFERED_REGIONS;
+	int numPreferedRegions = NUM_PREFERED_REGIONS;
+	//int numPreferedRegions = 8000;
+	float compactness = 25.f;
+#if 1
 	int numSegsL = SLICSegmentation(imL, numPreferedRegions, compactness, labelMapL, contourImgL);
 	int numSegsR = SLICSegmentation(imR, numPreferedRegions, compactness, labelMapR, contourImgR);
+#else
+	int MeanShiftSegmentation(cv::Mat &img, const float colorRadius, const float spatialRadius, const int minRegion, cv::Mat &labelMap);
+	int numSegsL = MeanShiftSegmentation(imL, 3.f, 3.f, 300, labelMapL);
+	int numSegsR = MeanShiftSegmentation(imR, 3.f, 3.f, 300, labelMapR);
+	void VisualizeSegmentation(cv::Mat &img, cv::Mat &labelMap);
+	VisualizeSegmentation(imL, labelMapL);
+#endif
+
+	printf("numRegionsL = %d\n", numSegsL);
+	printf("numRegionsR = %d\n", numSegsR);
+
+	extern cv::Mat gLabelMapL, gLabelMapR;
+	gLabelMapL = labelMapL;
+	gLabelMapR = labelMapR;
+
+	extern std::vector<cv::Vec3b> gMeanLabColorsL, gMeanLabColorsR;
+	gMeanLabColorsL = ComupteSegmentMeanLabColor(gImLabL, labelMapL, numSegsL);
+	gMeanLabColorsR = ComupteSegmentMeanLabColor(gImLabR, labelMapR, numSegsR);
+
+	//cv::imshow("contour", contourImgL);
+	//cv::waitKey(0);
 
 	std::vector<cv::Point2f> baryCentersL, baryCentersR;
 	std::vector<std::vector<cv::Point2i>> segPixelListsL, segPixelListsR;
 	ConstructBaryCentersAndPixelLists(numSegsL, labelMapL, baryCentersL, segPixelListsL);
 	ConstructBaryCentersAndPixelLists(numSegsR, labelMapR, baryCentersR, segPixelListsR);
+
+	extern std::vector<std::vector<cv::Point2i>> gSegPixelListsL, gSegPixelListsR;
+	gSegPixelListsL = segPixelListsL;
+	gSegPixelListsR = segPixelListsR;
+
+	extern std::vector<std::vector<int>> segAnchorIndsL, segAnchorIndsR;
+	segAnchorIndsL.resize(numSegsL);
+	segAnchorIndsR.resize(numSegsR);
+	extern int ARAP_NUM_ANCHORS;
+	int numAnchors = ARAP_NUM_ANCHORS;
+	for (int id = 0; id < numSegsL; id++) {
+		segAnchorIndsL[id].resize(numAnchors);
+		for (int j = 0; j < numAnchors; j++) {
+			segAnchorIndsL[id][j] = rand() % segPixelListsL[id].size();
+		}
+	}
+	for (int id = 0; id < numSegsR; id++) {
+		segAnchorIndsR[id].resize(numAnchors);
+		for (int j = 0; j < numAnchors; j++) {
+			segAnchorIndsR[id][j] = rand() % segPixelListsR[id].size();
+		}
+	}
 
 	std::vector<std::vector<int>> nbGraphL, nbGraphR;	
 	ConstructNeighboringSegmentGraph(numSegsL, labelMapL, nbGraphL, 0);
@@ -633,10 +1090,8 @@ static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	ComputeSegmentSimilarityWeights(imL, nbGraphL, segPixelListsL, nbSimWeightsL);
 	ComputeSegmentSimilarityWeights(imR, nbGraphR, segPixelListsR, nbSimWeightsR);
 	
-	//srand(2466700234);
-	//ModifyGlobalSimilarityWeights(-1, labelMapL, baryCentersL, segPixelListsL);
-	//ModifyGlobalSimilarityWeights(+1, labelMapR, baryCentersR, segPixelListsR);
-	//VisualizeSimilarityWegiths(segImgL, gSimWeightsL);
+
+	//VisualizeSegmengSimilarityWeights(imL, nbGraphL, segPixelListL);
 
 
 	// Variables being optimized:
@@ -649,21 +1104,49 @@ static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 	
 	evalParams.numRows			= numRows;
 	evalParams.numCols			= numCols;
+	evalParams.numDisps			= numDisps;
 	evalParams.labelMap			= &labelMapL;
 	evalParams.baryCenters		= &baryCentersL;
 	evalParams.nbGraph			= &nbGraphL;
 	evalParams.segPixelLists	= &segPixelListsL;
+	evalParams.dsiL				= &gDsiL;
 
 	// Optimization starts
 	ConstrainedPatchMatchOnSegments(-1, 0.f, maxDisp, 8, true,
 		nL, uL, mL, vL, gSmoothL, baryCentersL, nbGraphL, nbSimWeightsL, segPixelListsL);
-	//ConstrainedPatchMatchOnSegments(+1, 0.f, maxDisp, 4, true,
-	//	nR, uR, mR, vR, gSmoothR, baryCentersR, nbGraphR, nbSimWeightsR, segPixelListsR);
-	printf("Evaluating *** DispDataL ***\n");
-	cv::Mat &disp = SegmentLabelToDisparityMap(numRows, numCols, nL, uL, baryCentersL, segPixelListsL);
+	ConstrainedPatchMatchOnSegments(+1, 0.f, maxDisp, 8, true,
+		nR, uR, mR, vR, gSmoothR, baryCentersR, nbGraphR, nbSimWeightsR, segPixelListsR);
+
+	dispL = SegmentLabelToDisparityMap(numRows, numCols, nL, uL, baryCentersL, segPixelListsL);
+	dispR = SegmentLabelToDisparityMap(numRows, numCols, nR, uR, baryCentersR, segPixelListsR);
+	
+
 	evalParams.n = &nL;
 	evalParams.u = &uL;
-	EvaluateDisparity(rootFolder, disp, 0.5f, &evalParams, "OnMouseTestARAP");
+	//EvaluateDisparity(rootFolder, dispL, 1.f, &evalParams);
+	cv::Mat dispPatchMatchOnlyL = dispL.clone();
+	cv::Mat dispPatchMatchOnlyR = dispR.clone();
+
+#if 0
+	cv::Mat &validPixelMapL = CrossCheck(dispL, dispR, -1, 2.f);
+	cv::Mat crossCheckedL = SetInvalidDisparityToZeros(dispL, validPixelMapL);
+	cv::Mat wmfL = dispL.clone();
+	void WeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixelMap, cv::Mat &img);
+	bs::Timer::Tic("WMF");
+	WeightedMedianFilterInvalidPixels(wmfL, validPixelMapL, gImLabL);
+	bs::Timer::Toc();
+
+	float scaleFactor = (rootFolder == "KITTI" ? 256 : 64);
+	dispL.convertTo(dispL, CV_16UC1, scaleFactor);
+	dispR.convertTo(dispR, CV_16UC1, scaleFactor);
+	wmfL.convertTo(wmfL, CV_16UC1, scaleFactor);
+	crossCheckedL.convertTo(crossCheckedL, CV_16UC1, scaleFactor);
+	cv::imwrite(outImageFilePath + "_dispL.png", dispL);
+	cv::imwrite(outImageFilePath + "_dispR.png", dispR);
+	cv::imwrite(outImageFilePath + "_wmfL.png", wmfL);
+	cv::imwrite(outImageFilePath + "_crossCheckedL.png", crossCheckedL);
+	return;
+#endif
 
 
 	extern int		ARAP_MAX_ITERS;
@@ -695,10 +1178,13 @@ static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 		//////////////////////////////////////////////////////////////////////////////////////////
 
 
+		//VisualizeSegmentConfidence(labelMapL, segPixelListsL, gDataL);
+
+
 		//////////////////////////////////////////////////////////////////////////////////////////
 		// Optimize E_SMOOTH
-		SolveARAPSmoothness(theta + 0.1f, gDataL, nbGraphL, nbSimWeightsL, nL, uL, mL, vL);
-		SolveARAPSmoothness(theta + 0.1f, gDataR, nbGraphR, nbSimWeightsR, nR, uR, mR, vR);
+		SolveARAPSmoothness(theta + 0.1f, gDataL, maxDisp, nbGraphL, nbSimWeightsL, nL, uL, mL, vL, baryCentersL);
+		SolveARAPSmoothness(theta + 0.1f, gDataR, maxDisp, nbGraphR, nbSimWeightsR, nR, uR, mR, vR, baryCentersR);
 
 		printf("Evaluating *** DispSmoothL ***\n");
 		cv::Mat &dispSmoothL = SegmentLabelToDisparityMap(numRows, numCols, mL, vL, baryCentersL, segPixelListsL);
@@ -713,10 +1199,50 @@ static void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR)
 		//////////////////////////////////////////////////////////////////////////////////////////
 	}
 
-	cv::Mat &dispDataL = SegmentLabelToDisparityMap(numRows, numCols, nL, uL, baryCentersL, segPixelListsL);
-	std::string workingDir = "d:/data/stereo/" + rootFolder;
-	std::string plyFilePath = workingDir + "/dispDataL.ply";
-	SaveDisparityToPly(dispDataL, imL, maxDisp, workingDir, plyFilePath);
+	
+	//////////////////////////////////////////////////////////////////////////////////////////
+	//                                      Output
+	//////////////////////////////////////////////////////////////////////////////////////////
+	cv::Mat dispDataL   = SegmentLabelToDisparityMap(numRows, numCols, nL, uL, baryCentersL, segPixelListsL);
+	cv::Mat dispDataR   = SegmentLabelToDisparityMap(numRows, numCols, nR, uR, baryCentersR, segPixelListsR);
+	cv::Mat dispSmoothL = SegmentLabelToDisparityMap(numRows, numCols, mL, vL, baryCentersL, segPixelListsL);
+	cv::Mat dispSmoothR = SegmentLabelToDisparityMap(numRows, numCols, mR, vR, baryCentersR, segPixelListsR);
+	cv::Mat validPixelL = CrossCheck(dispDataL, dispDataR, -1, 1.f);
+	cv::Mat validPixelR = CrossCheck(dispDataR, dispDataL, +1, 1.f);
+	cv::Mat dispCrossCheckedL = SetInvalidDisparityToZeros(dispDataL, validPixelL);
+	cv::Mat dispCrossCheckedR = SetInvalidDisparityToZeros(dispDataR, validPixelR);
+
+	void WeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixelMap, cv::Mat &img);
+	cv::Mat dispWmfL = dispDataL.clone();
+	bs::Timer::Tic("WMF");
+	WeightedMedianFilterInvalidPixels(dispWmfL, validPixelL, gImLabL);
+	bs::Timer::Toc();
+	EvaluateDisparity(rootFolder, dispWmfL, 0.5f, &evalParams, "OnMouseTestARAP");
+
+	float upFactor = (rootFolder == "KITTI" ? 256 : 64);
+	dispDataL.convertTo(dispDataL, CV_16UC1, upFactor);
+	dispDataR.convertTo(dispDataR, CV_16UC1, upFactor);
+	dispSmoothL.convertTo(dispSmoothL, CV_16UC1, upFactor);
+	dispSmoothR.convertTo(dispSmoothR, CV_16UC1, upFactor);
+	dispCrossCheckedL.convertTo(dispCrossCheckedL, CV_16UC1, upFactor);
+	dispCrossCheckedR.convertTo(dispCrossCheckedR, CV_16UC1, upFactor);
+	dispWmfL.convertTo(dispWmfL, CV_16UC1, upFactor);
+	dispPatchMatchOnlyL.convertTo(dispPatchMatchOnlyL, CV_16UC1, upFactor);
+	dispPatchMatchOnlyR.convertTo(dispPatchMatchOnlyR, CV_16UC1, upFactor);
+
+	cv::imwrite(filePathOutImage + "_dispCrossCheckedL.png", dispCrossCheckedL);
+	cv::imwrite(filePathOutImage + "_dispCrossCheckedR.png", dispCrossCheckedR);
+	cv::imwrite(filePathOutImage + "_dispDataL.png", dispDataL);
+	cv::imwrite(filePathOutImage + "_dispDataR.png", dispDataR);
+	cv::imwrite(filePathOutImage + "_dispSmoothL.png", dispSmoothL);
+	cv::imwrite(filePathOutImage + "_dispSmoothR.png", dispSmoothR);
+	cv::imwrite(filePathOutImage + "_wmfL.png", dispWmfL);
+	cv::imwrite(filePathOutImage + "_dispPatchMatchOnlyL.png", dispPatchMatchOnlyL);
+	cv::imwrite(filePathOutImage + "_dispPatchMatchOnlyR.png", dispPatchMatchOnlyR);
+
+	cv::Mat segImg = DrawSegmentImage(labelMapL);
+	cv::hconcat(segImg, imL, segImg);
+	cv::imwrite(filePathOutImage + "_SLIC.png", segImg);
 }
 
 void TestARAP()
@@ -743,6 +1269,7 @@ void TestARAP()
 		imR = cv::imread("D:/data/stereo/" + ROOTFOLDER + "/im6.png");
 	}
 #endif
-
-	RunARAP(ROOTFOLDER, imL, imR);
+	
+	cv::Mat dispL, dispR;
+	RunARAP(ROOTFOLDER, imL, imR, dispL, dispR,  "s", "s", "s");
 }

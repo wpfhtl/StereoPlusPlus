@@ -11,7 +11,7 @@
 #include "StereoAPI.h"
 #include "ReleaseAssert.h"
 
-static void VisualizeSegmentation(cv::Mat &img, cv::Mat &labelMap)
+void VisualizeSegmentation(cv::Mat &img, cv::Mat &labelMap)
 {
 	srand(12003);
 	int numRows = img.rows, numCols = img.cols;

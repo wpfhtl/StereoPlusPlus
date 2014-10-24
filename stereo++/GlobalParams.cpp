@@ -28,7 +28,6 @@ private:
 public:
 };
 
-std::string kittiTestCaseId = "000000_10";
 
 
 MCImg<float>				gDsiL;
@@ -37,6 +36,20 @@ MCImg<float>				gSimWeightsL;
 MCImg<float>				gSimWeightsR;
 MCImg<SimVector>			gSimVecsL;
 MCImg<SimVector>			gSimVecsR;
+
+cv::Mat gImLabL, gImLabR, gImGradL, gImGradR;
+cv::Mat gLabelMapL, gLabelMapR;
+cv::Mat gSobelImgL, gSobelImgR, gCensusImgL, gCensusImgR;
+int gNumDisps = 0;
+int NUM_PREFERED_REGIONS = 4000;
+std::string gFilePathOracleL, gFilePathOracleR;
+cv::Mat gDispSGML, gDispSGMR;
+std::string midd3Resolution, midd3TestCaseId;
+std::string kittiTestCaseId;
+std::vector<std::vector<cv::Point2i>> gSegPixelListsL, gSegPixelListsR;
+std::vector<std::vector<int>> segAnchorIndsL, segAnchorIndsR;
+int VISUALIZE_EVAL, DO_EVAL;
+
 
 enum CostAggregationType	{ GRID, TOP50 };
 enum MatchingCostType		{ ADGRADIENT, ADCENSUS };
@@ -79,11 +92,12 @@ float						ARAP_SIGMA;
 float						ARAP_THETASCALE;
 float						ARAP_THETAOFFSET;
 int							ARAP_MAX_ITERS;
+int							ARAP_NUM_ANCHORS;
 int							SEGMENT_LEN;
 
 
 
-cv::Mat gImRgbL, gImRgbR, gImGradL, gImGradR;
+
 
 struct GlobalParamsInitializer
 {
@@ -225,6 +239,10 @@ GlobalParamsInitializer::GlobalParamsInitializer()
 		else if (std::string(keyStr) == "ARAP_MAX_ITERS") {
 			sscanf(valStr, "%d", &ARAP_MAX_ITERS);
 			printf("%20s = %d\n", "ARAP_MAX_ITERS", ARAP_MAX_ITERS);
+		}
+		else if (std::string(keyStr) == "ARAP_NUM_ANCHORS") {
+			sscanf(valStr, "%d", &ARAP_NUM_ANCHORS);
+			printf("%20s = %d\n", "ARAP_NUM_ANCHORS", ARAP_NUM_ANCHORS);
 		}
 		else if (std::string(keyStr) == "SEGMENT_LEN") {
 			sscanf(valStr, "%d", &SEGMENT_LEN);

@@ -115,7 +115,8 @@ struct SlantedPlane {
 		nx /= (nfactor + 1e-3f);
 		ny /= (nfactor + 1e-3f);
 		float nz = sqrt(1.f - nx * nx - ny * ny);
-		float d = Randf(0.f, 60.f);
+		//float d = Randf(0.f, 60.f);
+		float d = Randf(0.f, 220.f);
 		return ConstructFromNormalDepthAndCoord(nx, ny, nz, d, y, x);
 
 	}
