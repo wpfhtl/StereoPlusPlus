@@ -10,6 +10,17 @@
 typedef  unsigned char uchar;
 
 
+bool FileExist(std::string filePath)
+{
+	if (FILE *file = fopen(filePath.c_str(), "r")) {
+		fclose(file);
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
 // check whether machine is little endian
 int littleendian()
 {

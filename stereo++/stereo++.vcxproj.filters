@@ -234,9 +234,6 @@
     <ClCompile Include="MeanShift\rlist.cpp">
       <Filter>MeanShift</Filter>
     </ClCompile>
-    <ClCompile Include="ioPfm.cpp">
-      <Filter>LocalMethods</Filter>
-    </ClCompile>
     <ClCompile Include="EvalParams.h">
       <Filter>Evaluation</Filter>
     </ClCompile>
@@ -282,7 +279,16 @@
     <ClCompile Include="daisy-1.8.1\src\main.cpp">
       <Filter>daisy</Filter>
     </ClCompile>
-    <ClCompile Include="wmf_main.cpp">
+    <ClCompile Include="disp2colorjet.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="other_mains.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="iopfm.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="BoostResults.cpp">
       <Filter>LocalMethods</Filter>
     </ClCompile>
   </ItemGroup>

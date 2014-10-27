@@ -1,3 +1,4 @@
+#if 1
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -89,6 +90,7 @@ int main(int argc, char **argv)
 	if (benchmark == "Midd3") {
 		extern std::string midd3Resolution;
 		extern std::string midd3TestCaseId;
+		bool FileExist(std::string filePath);
 
 		midd3Resolution			= argv[2];
 		midd3TestCaseId			= argv[3];
@@ -98,6 +100,10 @@ int main(int argc, char **argv)
 		filePathOutImage		= argv[7];
 		filePathImageL = "D:\\data\\MiddEval3\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\im0.png";
 		filePathImageR = "D:\\data\\MiddEval3\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\im1_rectified.png";
+		
+		if (!FileExist(filePathImageR)) {
+			filePathImageR = "D:\\data\\MiddEval3\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\im1.png";
+		}
 
 		gNumDisps = ReadCalibFile("D:\\data\\MiddEval3\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\calib.txt");
 	}
@@ -178,7 +184,7 @@ int main(int argc, char **argv)
 }
 
 
-
+#endif
 
 
 

@@ -94,7 +94,7 @@ float						ARAP_THETAOFFSET;
 int							ARAP_MAX_ITERS;
 int							ARAP_NUM_ANCHORS;
 int							SEGMENT_LEN;
-
+float						ARAP_CENSUS_WEIGHT;
 
 
 
@@ -248,6 +248,11 @@ GlobalParamsInitializer::GlobalParamsInitializer()
 			sscanf(valStr, "%d", &SEGMENT_LEN);
 			printf("%20s = %d\n", "SEGMENT_LEN", SEGMENT_LEN);
 		}
+		else if (std::string(keyStr) == "ARAP_CENSUS_WEIGHT") {
+			sscanf(valStr, "%f", &ARAP_CENSUS_WEIGHT);
+			printf("%20s = %f\n", "ARAP_CENSUS_WEIGHT", ARAP_CENSUS_WEIGHT);
+		}
+		
 	}
 	
 	fclose(fid);

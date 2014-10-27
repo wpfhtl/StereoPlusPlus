@@ -13,7 +13,7 @@
 #include <string>
 
 #include "MCImg.h"
-
+#include "SlantedPlane.h"
 
 struct ARAPEvalParams {
 	int numRows, numCols;
@@ -29,8 +29,11 @@ struct ARAPEvalParams {
 	std::vector<std::vector<cv::Point2i>> *segPixelLists;
 	MCImg<float> *dsiL;
 	int numDisps;
+	MCImg<SlantedPlane> *pixelwiseSlantedPlanesL;
+	MCImg<float> *pixelwiseBestCostsL;
 	ARAPEvalParams() : numRows(0), numCols(0), labelMap(0), baryCenters(0), dispL(0), canvas(0),
-		n(0), u(0), nbGraph(0), segPixelLists(0), confidenceImg(0), GT(0), dsiL(0), numDisps(0) {}
+		n(0), u(0), nbGraph(0), segPixelLists(0), confidenceImg(0), GT(0), dsiL(0), numDisps(0),
+		pixelwiseSlantedPlanesL(0), pixelwiseBestCostsL(0) {}
 };
 
 #endif

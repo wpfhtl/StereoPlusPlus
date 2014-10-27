@@ -437,7 +437,7 @@ inline float __slantedPlaneCost(int yc, int xc, int numRows, int numCols, cv::Ma
 {
 	float totalCost = 0.f;
 	float accWeight = 0.f;
-	for (int STRIDE = 1; STRIDE <= 2; STRIDE++) {
+	for (int STRIDE = 1; STRIDE <= 1; STRIDE++) {
 		cv::Vec3b center = img.at<cv::Vec3b>(yc, xc);
 		for (int y = yc - PATCHRADIUS; y <= yc + PATCHRADIUS; y += STRIDE) {
 			for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE) {
@@ -493,7 +493,7 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 		float totalCost = 0.f, accWeight = 0.f;
 
 #if 1
-		for (int STRIDE = 1; STRIDE <= 2; STRIDE++) {
+		for (int STRIDE = 1; STRIDE <= 1; STRIDE++) {
 			for (int y = yc - PATCHRADIUS; y <= yc + PATCHRADIUS; y += STRIDE) {
 				for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE) {
 					if (InBound(y, x, numRows, numCols)) {
@@ -567,7 +567,7 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 		cv::Vec3b center = labImg.at<cv::Vec3b>(yc, xc);
 		float totalCost = 0.f, accWeight = 0.f;
 
-		for (int STRIDE = 1; STRIDE <= 2; STRIDE++) {
+		for (int STRIDE = 1; STRIDE <= 1; STRIDE++) {
 			for (int y = yc - PATCHRADIUS; y <= yc + PATCHRADIUS; y += STRIDE) {
 				for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE) {
 					if (InBound(y, x, numRows, numCols)) {

@@ -462,7 +462,6 @@ void OnMouseTestARAPKITTI(int event, int x, int y, int flags, void *param)
 	cv::imshow("cmpImg", tmpCanvas);
 }
 
-
 void OnMouseTestPlanefitMidd3(int event, int x, int y, int flags, void *param)
 {
 
@@ -596,4 +595,109 @@ void OnMouseTestPlanefitMidd3(int event, int x, int y, int flags, void *param)
 	//}
 	cv::imshow("cmpImg", tmpCanvas);
 	
+}
+
+
+void OnMouseComparePixelwiseAndSegmentwisePM(int event, int x, int y, int flags, void *param)
+{
+
+	if (event != CV_EVENT_LBUTTONDOWN
+		&& event != CV_EVENT_LBUTTONDBLCLK
+		&& event != CV_EVENT_RBUTTONDBLCLK) {
+		return;
+	}
+
+	ARAPEvalParams *evalParams = (ARAPEvalParams*)param;
+	cv::Mat tmpCanvas = evalParams->canvas->clone();
+	int numRows = evalParams->numRows;
+	int numCols = evalParams->numCols;
+	
+	MCImg<SlantedPlane> &pixelwiseSlantedPlanesL = *evalParams->pixelwiseSlantedPlanesL;
+	MCImg<float> &pixelwiseBestCostsL = *evalParams->pixelwiseBestCostsL;
+	cv::Mat &dispL = *evalParams->dispL;
+	cv::Mat &labelMapL = *evalParams->labelMap;
+	std::vector<cv::Point2f> &baryCentersL = *evalParams->baryCenters;
+	std::vector<cv::Vec3f> &nL = *evalParams->n;
+	std::vector<float> &uL = *evalParams->u;
+
+	y %= numRows;
+	x %= numCols;
+
+	if (event == CV_EVENT_LBUTTONDOWN) {
+
+		if (evalParams->dispL == NULL) {
+			printf("dispL == NULL\n");
+		}
+		else {
+			cv::Mat &dispL = *evalParams->dispL;
+			cv::Mat &GT = *evalParams->GT;
+			float dPixelwisePM = pixelwiseSlantedPlanesL[y][x].ToDisparity(y, x);
+			float dMY = dispL.at<float>(y, x);
+			char text[1024];
+			sprintf(text, "(%d, %d)  dPixelwisePM: %.2f  MINE: %.2f", y, x, dPixelwisePM, dMY);
+			cv::putText(tmpCanvas, std::string(text), cv::Point2f(20, 50), 0, 0.6, cv::Scalar(0, 0, 255, 1), 2);
+			printf("(%d, %d)  dPixelwisePM: %.2f  MINE: %.2f\n", y, x, dPixelwisePM, dMY);
+		}
+	}
+
+	if (event == CV_EVENT_LBUTTONDBLCLK || event == CV_EVENT_RBUTTONDBLCLK)
+	{
+		if (!evalParams->labelMap || !evalParams->u || !evalParams->n || !evalParams->baryCenters) {
+			printf("(!evalParams->labelMap || !evalParams->u || !evalParams->n || !evalParams->baryCenters) is false!\n");
+			return;
+		}
+
+
+		std::vector<cv::Point2f> &baryCenters = *evalParams->baryCenters;
+		std::vector<cv::Vec3f>   &n = *evalParams->n;
+		std::vector<float>		 &u = *evalParams->u;
+		cv::Mat					 &labelMap = *evalParams->labelMap;
+
+		int id = labelMap.at<int>(y, x);
+		SlantedPlane sp = SlantedPlane::ConstructFromNormalDepthAndCoord(
+			n[id][0], n[id][1], n[id][2], u[id], baryCenters[id].y, baryCenters[id].x);
+		char textBuf[1024];
+		sprintf(textBuf, "pixelwise: ( a,  b,  c) = (% 11.6f, % 11.6f, % 11.6f)", sp.a, sp.b, sp.c);
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2f(20, 50), CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+		sprintf(textBuf, "pixelwise: (nx, ny, nz) = (% 11.6f, % 11.6f, % 11.6f)", sp.nx, sp.ny, sp.nz);
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2f(20, 80), CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+
+		printf("pixelwise: ( a,  b,  c) = (% 11.6f, % 11.6f, % 11.6f)\n", sp.a, sp.b, sp.c);
+		printf("pixelwise: (nx, ny, nz) = (% 11.6f, % 11.6f, % 11.6f)\n", sp.nx, sp.ny, sp.nz);
+
+		SlantedPlane pixelwiseSp = pixelwiseSlantedPlanesL[y][x];
+		sprintf(textBuf, "segmtwise: ( a,  b,  c) = (% 11.6f, % 11.6f, % 11.6f)", pixelwiseSp.a, pixelwiseSp.b, pixelwiseSp.c);
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2f(20, 110), CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+		sprintf(textBuf, "segmtwise: (nx, ny, nz) = (% 11.6f, % 11.6f, % 11.6f)", pixelwiseSp.nx, pixelwiseSp.ny, pixelwiseSp.nz);
+		cv::putText(tmpCanvas, std::string(textBuf), cv::Point2f(20, 140), CV_FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+
+		printf("segmtwise: ( a,  b,  c) = (% 11.6f, % 11.6f, % 11.6f)\n", pixelwiseSp.a, pixelwiseSp.b, pixelwiseSp.c);
+		printf("segmtwise: (nx, ny, nz) = (% 11.6f, % 11.6f, % 11.6f)\n", pixelwiseSp.nx, pixelwiseSp.ny, pixelwiseSp.nz);
+
+
+		int yc = baryCenters[id].y + 0.5;
+		int xc = baryCenters[id].y + 0.5;
+		
+		float ConstrainedPatchMatchCost(float yc, float xc, SlantedPlane &newGuess,
+			cv::Vec3f &mL, float vL, float maxDisp, float theta, int sign);
+		float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int sign);
+
+		int maxDisp = evalParams->numDisps - 1;
+		printf("(yc, xc) = (%d, %d)\n", yc, xc);
+		
+		float pixelwisePlaneConstrainedCost = ConstrainedPatchMatchCost(yc, xc, pixelwiseSp, cv::Vec3f(0, 0, 0), 0.f, maxDisp, 0, -1);
+		float pixelwisePlaneCost = PatchMatchSlantedPlaneCost(yc, xc, pixelwiseSp, -1);
+		float pixelwisePlaneSavedCost = pixelwiseBestCostsL[yc][xc];
+		printf("pixelwisePlaneConstrainedCost:  %f\n", pixelwisePlaneConstrainedCost);
+		printf("pixelwisePlaneCost           :  %f\n", pixelwisePlaneCost);
+		printf("pixelwisePlaneSavedCost      :  %f\n\n", pixelwisePlaneSavedCost);
+
+		float segmentwisePlaneConstrainedCost = ConstrainedPatchMatchCost(yc, xc, sp, cv::Vec3f(0, 0, 0), 0.f, maxDisp, 0, -1);
+		float segmentwisePlaneCost = PatchMatchSlantedPlaneCost(yc, xc, sp, -1);
+		printf("segmentwisePlaneConstraintedCost:  %f\n", segmentwisePlaneConstrainedCost);
+		printf("segmentwisePlaneCost            :  %f\n\n", segmentwisePlaneCost);
+
+		
+	}
+	cv::imshow("dispImg", tmpCanvas);
 }

@@ -131,7 +131,7 @@ static void VisualizeSimilarityWegiths(cv::Mat &img, MCImg<float> &simWeights)
 	cv::waitKey(0);
 }
 
-static void ConstructBaryCentersAndPixelLists(int numSegs, cv::Mat &labelMap,
+void ConstructBaryCentersAndPixelLists(int numSegs, cv::Mat &labelMap,
 	std::vector<cv::Point2f> &baryCenters, std::vector<std::vector<cv::Point2i>> &segPixelLists)
 {
 	baryCenters = std::vector<cv::Point2f>(numSegs, cv::Point2f(0, 0));
@@ -159,10 +159,12 @@ static void ConstructBaryCentersAndPixelLists(int numSegs, cv::Mat &labelMap,
 		centroidIdPairs[i] = std::pair<cv::Point2f, int>(baryCenters[i], i);
 	}
 	
+	
+
+#if 0
 	std::sort(centroidIdPairs.begin(), centroidIdPairs.end(), SortByRowCoord());
 	float rowMargin = sqrt((numRows * numCols) / (float)numSegs);	// avg segment side length.
 	printf("rowMargin = %.2f\n", rowMargin);
-
 	int headIdx = 0;
 	for (double y = 0; y <= numRows; y += rowMargin) {
 		int idx = headIdx;
@@ -174,6 +176,22 @@ static void ConstructBaryCentersAndPixelLists(int numSegs, cv::Mat &labelMap,
 		}
 		headIdx = idx;
 	}
+#else 
+	std::sort(centroidIdPairs.begin(), centroidIdPairs.end(), SortByColCoord());
+	float rowMargin = sqrt((numRows * numCols) / (float)numSegs);	// avg segment side length.
+	printf("rowMargin = %.2f\n", rowMargin);
+	int headIdx = 0;
+	for (double x = 0; x <= numCols; x += rowMargin) {
+		int idx = headIdx;
+		while (idx < numSegs && centroidIdPairs[idx].first.x < x + rowMargin) {
+			idx++;
+		}
+		if (headIdx < numSegs) {	// to ensure that we do not have access violation at headIdx
+			std::sort(&centroidIdPairs[headIdx], &centroidIdPairs[0] + idx, SortByRowCoord());
+		}
+		headIdx = idx;
+	}
+#endif
 
 	std::vector<std::vector<cv::Point2i>> tmpPixelLists(numSegs);
 	for (int id = 0; id < numSegs; id++) {
@@ -289,7 +307,7 @@ static void ComputeSegmentSimilarityWeights(cv::Mat &img, std::vector<std::vecto
 		nbSimWeights[id].resize(nbGraph[id].size());
 		for (int k = 0; k < nbGraph[id].size(); k++) {
 			int nbId = nbGraph[id][k];
-			float w = exp(-L1Dist(meanColors[id], meanColors[nbId]) / 30.f);
+			float w = exp(-L1Dist(meanColors[id], meanColors[nbId]) / 15.f);
 			nbSimWeights[id][k] = w;
 			if (w < 0.3) { w = 0.f; }
 			//printf("nbSimWeights: %f\n", w); 
@@ -347,10 +365,11 @@ static cv::Mat SegmentLabelToDisparityMap(int numRows, int numCols, std::vector<
 	return SegmentLabelToDisparityMap(numRows, numCols, slantedPlanes, segPixelLists);
 }
 
-static float ConstrainedPatchMatchCost(float yc, float xc, SlantedPlane &newGuess, 
+float ConstrainedPatchMatchCost(float yc, float xc, SlantedPlane &newGuess, 
 	cv::Vec3f &mL, float vL, float maxDisp, float theta, int sign)
 {
-	float dataCost = PatchMatchSlantedPlaneCost(yc + 0.5, xc + 0.5, newGuess, sign);
+	//float dataCost = PatchMatchSlantedPlaneCost(yc + 0.5, xc + 0.5, newGuess, sign);
+	float dataCost = PatchMatchSlantedPlaneCost(yc, xc, newGuess, sign);
 	float oracleDiff = 0.f;
 	
 
@@ -371,9 +390,8 @@ static float ConstrainedPatchMatchCost(float yc, float xc, SlantedPlane &newGues
 	//float smoothCost = (nL - mL).dot(nL - mL);// +(uL - vL) * (uL - vL);
 	float nx = nL[0], ny = nL[1], nz = nL[2], mx = mL[0], my = mL[1], mz = mL[2];
 	float normalizedDispDiff = (uL - vL) / maxDisp;
-	normalizedDispDiff *= normalizedDispDiff;
 	float smoothCost = (nx - mx) * (nx - mx) + (ny - my) * (ny - my)
-		+ (nz - mz) * (nz - mz) + normalizedDispDiff;
+		+ (nz - mz) * (nz - mz); + normalizedDispDiff * normalizedDispDiff;
 	smoothCost *= maxDisp * maxDisp;
 	
 	extern float ARAP_LAMBDA;
@@ -542,7 +560,7 @@ static void SolveARAPSmoothness(float theta, std::vector<float> &confidence, int
 	std::vector<float> G = confidence;
 	for (int i = 0; i < G.size(); i++) {
 		if (G[i] < 0.5) {
-			//G[i] = 0;
+			//G[i] = 0; 
 		}
 	}
 
@@ -969,7 +987,7 @@ void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL,
 
 	bs::Timer::Tic("cost volume");
 
-	double tensorSize = (double)numRows * numCols * numDisps * sizeof(float) / (double)(1024 * 1024);
+	double tensorSize = (double)numRows * numCols * numDisps * sizeof(unsigned short) / (double)(1024 * 1024);
 	printf("(numRows, numCols) = (%d, %d)\n", numRows, numCols);
 	printf("tensorSize: %lf\n", tensorSize);
 	printf("numDisps: %d\n", numDisps);
@@ -1029,7 +1047,7 @@ void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL,
 	extern int NUM_PREFERED_REGIONS;
 	int numPreferedRegions = NUM_PREFERED_REGIONS;
 	//int numPreferedRegions = 8000;
-	float compactness = 25.f;
+	float compactness = 30.f;
 #if 1
 	int numSegsL = SLICSegmentation(imL, numPreferedRegions, compactness, labelMapL, contourImgL);
 	int numSegsR = SLICSegmentation(imR, numPreferedRegions, compactness, labelMapR, contourImgR);
@@ -1112,18 +1130,19 @@ void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL,
 	evalParams.dsiL				= &gDsiL;
 
 	// Optimization starts
-	ConstrainedPatchMatchOnSegments(-1, 0.f, maxDisp, 8, true,
+	ConstrainedPatchMatchOnSegments(-1, 0.f, maxDisp, 4, true,
 		nL, uL, mL, vL, gSmoothL, baryCentersL, nbGraphL, nbSimWeightsL, segPixelListsL);
-	ConstrainedPatchMatchOnSegments(+1, 0.f, maxDisp, 8, true,
-		nR, uR, mR, vR, gSmoothR, baryCentersR, nbGraphR, nbSimWeightsR, segPixelListsR);
+	/*ConstrainedPatchMatchOnSegments(+1, 0.f, maxDisp, 4, true,
+		nR, uR, mR, vR, gSmoothR, baryCentersR, nbGraphR, nbSimWeightsR, segPixelListsR);*/
 
 	dispL = SegmentLabelToDisparityMap(numRows, numCols, nL, uL, baryCentersL, segPixelListsL);
-	dispR = SegmentLabelToDisparityMap(numRows, numCols, nR, uR, baryCentersR, segPixelListsR);
+	//dispR = SegmentLabelToDisparityMap(numRows, numCols, nR, uR, baryCentersR, segPixelListsR);
 	
 
 	evalParams.n = &nL;
 	evalParams.u = &uL;
-	//EvaluateDisparity(rootFolder, dispL, 1.f, &evalParams);
+	evalParams.dispL = &dispL;
+	EvaluateDisparity(rootFolder, dispL, 1.f, &evalParams);
 	cv::Mat dispPatchMatchOnlyL = dispL.clone();
 	cv::Mat dispPatchMatchOnlyR = dispR.clone();
 
@@ -1213,11 +1232,32 @@ void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL,
 	cv::Mat dispCrossCheckedR = SetInvalidDisparityToZeros(dispDataR, validPixelR);
 
 	void WeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixelMap, cv::Mat &img);
+	void FastWeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixelMap, cv::Mat &img, bool useValidPixelOnly);
+	void PixelwiseOcclusionFilling(cv::Mat &disp, cv::Mat &validPixelMap);
+
 	cv::Mat dispWmfL = dispDataL.clone();
+	cv::Mat dispWmfR = dispDataR.clone();
+	PixelwiseOcclusionFilling(dispWmfL, validPixelL);
+	PixelwiseOcclusionFilling(dispWmfR, validPixelR);
+	validPixelL = CrossCheck(dispDataL, dispDataR, -1, 1.f);
+	validPixelR = CrossCheck(dispDataR, dispDataL, +1, 1.f);
+	
 	bs::Timer::Tic("WMF");
-	WeightedMedianFilterInvalidPixels(dispWmfL, validPixelL, gImLabL);
+	//WeightedMedianFilterInvalidPixels(dispWmfL, validPixelL, gImLabL);
+	//FastWeightedMedianFilterInvalidPixels(dispWmfL, validPixelL, imL, 0);
 	bs::Timer::Toc();
 	EvaluateDisparity(rootFolder, dispWmfL, 0.5f, &evalParams, "OnMouseTestARAP");
+
+	cv::Mat Float2ColorJet(cv::Mat &fimg, float dmin, float dmax);
+	cv::imwrite(filePathOutImage + "_colorjet_dispCrossCheckedL.png", Float2ColorJet(dispCrossCheckedL, 0, numDisps));
+	cv::imwrite(filePathOutImage + "_colorjet_dispCrossCheckedR.png", Float2ColorJet(dispCrossCheckedR, 0, numDisps));
+	cv::imwrite(filePathOutImage + "_colorjet_dispDataL.png", Float2ColorJet(dispDataL, 0, numDisps));
+	cv::imwrite(filePathOutImage + "_colorjet_dispDataR.png", Float2ColorJet(dispDataR, 0, numDisps));
+	cv::imwrite(filePathOutImage + "_colorjet_dispSmoothL.png", Float2ColorJet(dispSmoothL, 0, numDisps));
+	cv::imwrite(filePathOutImage + "_colorjet_dispSmoothR.png", Float2ColorJet(dispSmoothR, 0, numDisps));
+	cv::imwrite(filePathOutImage + "_colorjet_dispBackgroundFillWmfUseAllL.png", Float2ColorJet(dispWmfL, 0, numDisps));
+	cv::imwrite(filePathOutImage + "_colorjet_dispPatchMatchOnlyL.png", Float2ColorJet(dispPatchMatchOnlyL, 0, numDisps));
+	cv::imwrite(filePathOutImage + "_colorjet_dispPatchMatchOnlyR.png", Float2ColorJet(dispPatchMatchOnlyR, 0, numDisps));
 
 	float upFactor = (rootFolder == "KITTI" ? 256 : 64);
 	dispDataL.convertTo(dispDataL, CV_16UC1, upFactor);
@@ -1236,13 +1276,14 @@ void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL,
 	cv::imwrite(filePathOutImage + "_dispDataR.png", dispDataR);
 	cv::imwrite(filePathOutImage + "_dispSmoothL.png", dispSmoothL);
 	cv::imwrite(filePathOutImage + "_dispSmoothR.png", dispSmoothR);
-	cv::imwrite(filePathOutImage + "_wmfL.png", dispWmfL);
+	cv::imwrite(filePathOutImage + "_dispBackgroundFillWmfUseAllL.png", dispWmfL);
 	cv::imwrite(filePathOutImage + "_dispPatchMatchOnlyL.png", dispPatchMatchOnlyL);
 	cv::imwrite(filePathOutImage + "_dispPatchMatchOnlyR.png", dispPatchMatchOnlyR);
 
 	cv::Mat segImg = DrawSegmentImage(labelMapL);
 	cv::hconcat(segImg, imL, segImg);
 	cv::imwrite(filePathOutImage + "_SLIC.png", segImg);
+	
 }
 
 void TestARAP()

@@ -1,0 +1,315 @@
+
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <vector>
+#include <set>
+
+#include "StereoAPI.h"
+#include "Timer.h"
+
+#ifdef _DEBUG
+#pragma comment(lib, "opencv_core248d.lib")
+#pragma comment(lib, "opencv_highgui248d.lib")
+#pragma comment(lib, "opencv_imgproc248d.lib")
+#pragma comment(lib, "opencv_features2d248d.lib")
+#pragma comment(lib, "opencv_calib3d248d.lib")
+#pragma comment(lib, "opencv_video248d.lib")
+#pragma comment(lib, "opencv_flann248d.lib")
+#pragma comment(lib, "opencv_nonfree248d.lib")
+#else
+#pragma comment(lib, "opencv_core248.lib")
+#pragma comment(lib, "opencv_highgui248.lib")
+#pragma comment(lib, "opencv_imgproc248.lib")
+#pragma comment(lib, "opencv_features2d248.lib")
+#pragma comment(lib, "opencv_calib3d248.lib")
+#pragma comment(lib, "opencv_video248.lib")
+#pragma comment(lib, "opencv_flann248.lib")
+#pragma comment(lib, "opencv_nonfree248.lib")
+#endif
+
+
+
+#if 0
+int main(int argc, char **argv)
+{
+	if (argc != 6) {
+		printf("usage: %s filePathImgL filePathDispL filePathDispR filePathDispOut useValidPixelOnly", argv[0]);
+		exit(-1);
+	}
+
+	std::string filePathImgL	= std::string(argv[1]);
+	std::string filePathDispL	= std::string(argv[2]);
+	std::string filePathDispR	= std::string(argv[3]);
+	std::string filePathDispOut = std::string(argv[4]);
+	int useValidPixelOnly		= atoi(argv[5]);
+
+	cv::Mat img		= cv::imread(filePathImgL);
+	cv::Mat dispL	= cv::imread(filePathDispL, CV_LOAD_IMAGE_UNCHANGED);
+	cv::Mat dispR	= cv::imread(filePathDispR, CV_LOAD_IMAGE_UNCHANGED);
+	dispL.convertTo(dispL, CV_32FC1, 1.f / 64.f);
+	dispR.convertTo(dispR, CV_32FC1, 1.f / 64.f);
+	cv::Mat validPixelMapL = CrossCheck(dispL, dispR, -1, 1.f);
+	cv::Mat validPixelMapR = CrossCheck(dispR, dispL, +1, 1.f);
+
+	void PixelwiseOcclusionFilling(cv::Mat &disp, cv::Mat &validPixelMap);
+	PixelwiseOcclusionFilling(dispL, validPixelMapL);
+	PixelwiseOcclusionFilling(dispR, validPixelMapR);
+
+	validPixelMapL = CrossCheck(dispL, dispR, -1, 1.f);
+	validPixelMapR = CrossCheck(dispR, dispL, +1, 1.f);
+
+
+	void FastWeightedMedianFilterInvalidPixels(cv::Mat &disp,
+		cv::Mat &validPixelMap, cv::Mat &img, bool useValidPixelOnly);
+	cv::Mat dispWmfL = dispL.clone();
+	bs::Timer::Tic("wmf");
+	FastWeightedMedianFilterInvalidPixels(dispWmfL, validPixelMapL, img, useValidPixelOnly);
+	bs::Timer::Toc();
+
+	dispWmfL.convertTo(dispWmfL, CV_16UC1, 64);
+	cv::imwrite(filePathDispOut, dispWmfL);
+}
+#endif
+#if 0
+int main(int argc, char **argv)
+{
+	if (argc < 5) {
+		fprintf(stderr, "usage: %s.exe [-calib calibfile.txt] [-vminmax vmin vmax] dispIn.pfm/.png dispOut.png [visualizeScale=64]", argv[0]);
+		exit(-1);
+	}
+
+	char *filePathCalib = NULL;
+	float dmin = 0;
+	float dmax = 0;
+	int optIdx = 0;
+	float visualizeScale = 64.f;
+
+	if (strcmp(argv[1], "-calib") == 0) {
+		void readVizRange(char *calibfile, float& dmin, float& dmax);
+		filePathCalib = argv[2];
+		readVizRange(filePathCalib, dmin, dmax);
+		optIdx = 3;
+	}
+	else if (strcmp(argv[1], "-vminmax") == 0) {
+		dmin = atof(argv[2]);
+		dmax = atof(argv[3]);
+		optIdx = 4;
+	}
+	if (dmin == dmax) {
+		fprintf(stderr, "error, dmin == dmax. dmin = %f, dmax = %f\n", dmin, dmax);
+		exit(-1);
+	}
+	std::string filePathDisp		= argv[optIdx++];
+	std::string filePathColorJet	= argv[optIdx++];
+	if (optIdx < argc) {
+		visualizeScale = atof(argv[optIdx]);
+	}
+
+	printf("dmin = %f\n", dmin);
+	printf("dmax = %f\n", dmax);
+	printf("visualizeScale = %f\n", visualizeScale);
+	printf("infilePath = %s\n", filePathDisp.c_str());
+	printf("outfilePath = %s\n", filePathColorJet.c_str());
+
+	std::cout << filePathDisp.substr(filePathDisp.length() - 4, 4) << "\n";
+
+	cv::Mat disp, colorJetImg;
+	if (filePathDisp.substr(filePathDisp.length() - 4, 4) == ".pfm") {
+		printf("reading PFM file...\n");
+		cv::Mat ReadFilePFM(std::string filePath);
+		disp = ReadFilePFM(filePathDisp);
+	}
+	else {
+		printf("reading PNG file...\n");
+		disp = cv::imread(filePathDisp, CV_LOAD_IMAGE_UNCHANGED);
+		disp.convertTo(disp, CV_32FC1, 1.f / visualizeScale);
+	}
+
+	/*disp.convertTo(disp, CV_8UC1, 64);
+	cv::imshow("disp[", disp);
+	cv::waitKey(0);*/
+
+	cv::Mat Float2ColorJet(cv::Mat &fimg, float dmin, float dmax);
+	colorJetImg = Float2ColorJet(disp, dmin, dmax);
+	cv::imwrite(filePathColorJet, colorJetImg); 
+
+	return 0;
+}
+
+#endif
+
+#if 0
+
+struct ParamsCombine {
+	cv::Mat *labelMap;
+	cv::Mat *dispPM;
+	cv::Mat *dispARAP;
+	cv::Mat *dispCombined;
+	cv::Mat *canvas;
+	std::vector<std::vector<cv::Point2i>> *segPixelLists;
+	int numDisps;
+	ParamsCombine() : labelMap(0), dispPM(0), dispARAP(0), 
+		dispCombined(0), canvas(0), segPixelLists(0), numDisps(0) {}
+};
+
+void OnMouseCombineDisparities(int event, int x, int y, int flags, void *param)
+{
+
+	if (event != CV_EVENT_LBUTTONDOWN && event != CV_EVENT_RBUTTONDOWN
+		&& event != CV_EVENT_LBUTTONDBLCLK && event != CV_EVENT_RBUTTONDBLCLK) {
+		return;
+	}
+
+	ParamsCombine *params = (ParamsCombine*)param;
+	int numRows = params->dispARAP->rows;
+	int numCols = params->dispARAP->cols;
+
+	cv::Mat &canvas = *params->canvas;
+	float zoomFactor = (float)numRows / canvas.rows;
+	x *= zoomFactor;
+	y *= zoomFactor;
+	y %= numRows;
+	x %= numCols;
+
+	cv::Mat &dispPM = *params->dispPM;
+	cv::Mat &dispARAP = *params->dispARAP;
+	cv::Mat &dispCombined = *params->dispCombined;
+	std::vector<std::vector<cv::Point2i>> &segPixelLists = *params->segPixelLists;
+	cv::Mat &labelMap = *params->labelMap;
+
+	int id = labelMap.at<int>(y, x);
+	cv::Mat &dispSrc = cv::Mat();
+
+	if (event == CV_EVENT_LBUTTONDOWN || event == CV_EVENT_LBUTTONDBLCLK) {
+		// choose PM
+		dispSrc = dispPM;
+	}
+	if (event == CV_EVENT_RBUTTONDOWN || event == CV_EVENT_RBUTTONDBLCLK) {
+		// choose ARAP
+		dispSrc = dispARAP;
+	}
+
+	if (event == CV_EVENT_LBUTTONDOWN || event == CV_EVENT_RBUTTONDOWN) {
+		std::vector<cv::Point2i> &pointList = segPixelLists[id];
+		for (int i = 0; i < pointList.size(); i++) {
+			cv::Point2i &p = pointList[i];
+			dispCombined.at<float>(p.y, p.x) = dispSrc.at<float>(p.y, p.x);
+			int r = 0;
+			int g = 0;
+			int b = 0;
+			float scale = 1.0 / (params->numDisps - 0);
+			void jet(float x, int& r, int& g, int& b);
+			float val = scale * (dispCombined.at<float>(p.y, p.x) - 0);
+			jet(val, r, g, b);
+
+			canvas.at<cv::Vec3b>(p.y, p.x) = cv::Vec3b(b, g, r);
+		}
+	}
+	if (event == CV_EVENT_LBUTTONDBLCLK || event == CV_EVENT_RBUTTONDBLCLK) {
+		std::set<int> idSet;
+		const int STRIDE = 12;
+		for (int yy = y - 100; yy <= y + 100; yy += 12)  {
+			for (int xx = x - 100; xx <= x + 100; xx += 12) {
+				if (InBound(yy, xx, numRows, numCols)) {
+					idSet.insert(labelMap.at<int>(yy, xx));
+				}
+			}
+		}
+
+		std::vector<int> segIds = std::vector<int>(idSet.begin(), idSet.end());
+		for (int k = 0; k < segIds.size(); k++) {
+			std::vector<cv::Point2i> &pointList = segPixelLists[segIds[k]];
+			for (int i = 0; i < pointList.size(); i++) {
+				cv::Point2i &p = pointList[i];
+				dispCombined.at<float>(p.y, p.x) = dispSrc.at<float>(p.y, p.x);
+				int r = 0;
+				int g = 0;
+				int b = 0;
+				float scale = 1.0 / (params->numDisps - 0);
+				void jet(float x, int& r, int& g, int& b);
+				float val = scale * (dispCombined.at<float>(p.y, p.x) - 0);
+				jet(val, r, g, b);
+
+				canvas.at<cv::Vec3b>(p.y, p.x) = cv::Vec3b(b, g, r);
+			}
+		}
+		
+	}
+	
+
+	//cv::Mat concat;
+	//cv::hconcat(dispCombined, dispARAP, concat);
+	//cv::Mat Float2ColorJet(cv::Mat &fimg, float dmin, float dmax);
+	//canvas = Float2ColorJet(concat, 0, params->numDisps);
+	//cv::resize(canvas, canvas, cv::Size(canvas.cols / 2, canvas.rows / 2));
+	//printf("fuck.\n");
+	cv::imshow("canvas", canvas);
+}
+
+int main(int argc, char **argv)
+{
+	if (argc != 6) {
+		fprintf(stderr, "usage: %s.exe filePathImgL filePathDispPML filePathDispARAPL filePathDispCombined ndisp\n", argv[0]);
+		exit(-1);
+	}
+
+	std::string filePathImage			= argv[1];
+	std::string filePathDispPM			= argv[2];
+	std::string filePathDispARAP		= argv[3];
+	std::string filePathDispCombined	= argv[4];
+	int numDisps = atoi(argv[5]);
+
+	cv::Mat img			= cv::imread(filePathImage);
+	cv::Mat dispPM		= cv::imread(filePathDispPM, CV_LOAD_IMAGE_UNCHANGED);
+	cv::Mat dispARAP	= cv::imread(filePathDispARAP, CV_LOAD_IMAGE_UNCHANGED);
+	
+	dispPM.convertTo(dispPM, CV_32FC1, 1.f / 64.f);
+	dispARAP.convertTo(dispARAP, CV_32FC1, 1.f / 64.f);
+	cv::Mat dispCombined = dispPM.clone();
+
+	int numRegions = 8000;
+	float compactness = 25.f;
+	int SLICSegmentation(const cv::Mat &img, const int numPreferedRegions, const int compactness, cv::Mat& labelMap, cv::Mat& contourImg);
+	cv::Mat labelMap, contourImg;
+	int numSegsL = SLICSegmentation(img, numRegions, compactness, labelMap, contourImg);
+
+	void ConstructBaryCentersAndPixelLists(int numSegs, cv::Mat &labelMap,
+		std::vector<cv::Point2f> &baryCenters, std::vector<std::vector<cv::Point2i>> &segPixelLists);
+	std::vector<cv::Point2f> baryCenters;
+	std::vector<std::vector<cv::Point2i>> segPixelLists;
+	ConstructBaryCentersAndPixelLists(numSegsL, labelMap, baryCenters, segPixelLists);
+
+	cv::Mat Float2ColorJet(cv::Mat &fimg, float dmin, float dmax);
+	cv::Mat jetPM = Float2ColorJet(dispPM, 0, numDisps);
+	cv::Mat jetARAP = Float2ColorJet(dispARAP, 0, numDisps);
+	cv::Mat canvas;
+	cv::hconcat(jetPM, jetARAP, canvas);
+	//cv::resize(canvas, canvas, cv::Size(canvas.cols / 2, canvas.rows / 2));
+
+	ParamsCombine params;
+	params.dispARAP			= &dispARAP;
+	params.dispPM			= &dispPM;
+	params.dispCombined		= &dispCombined;
+	params.labelMap			= &labelMap;
+	params.segPixelLists	= &segPixelLists;
+	params.canvas			= &canvas;
+	params.numDisps			= numDisps;
+
+	cv::imshow("canvas", canvas);
+	cv::setMouseCallback("canvas", OnMouseCombineDisparities, &params);
+	cv::waitKey(0);
+
+	cv::Mat jetMapCombined = Float2ColorJet(dispCombined, 0, numDisps);
+	dispCombined.convertTo(dispCombined, CV_16UC1, 64);
+	
+	cv::imwrite(filePathDispCombined, dispCombined);
+	cv::imwrite(filePathDispCombined + "_jetmap.png", jetMapCombined);
+	
+	return 0;
+}
+#endif

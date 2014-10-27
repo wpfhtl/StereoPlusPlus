@@ -172,7 +172,8 @@ void PixelwiseOcclusionFilling(cv::Mat &disp, cv::Mat &validPixelMap)
 	}
 }
 
-void FastWeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixelMap, cv::Mat &img)
+void FastWeightedMedianFilterInvalidPixels(cv::Mat &disp, 
+	cv::Mat &validPixelMap, cv::Mat &img, bool useValidPixelOnly = true)
 {
 	// Disparity of invalid pixels do not contribute
 	float expTable[256 * 3];
@@ -181,6 +182,7 @@ void FastWeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixelMap
 	}
 	cv::Mat dispOut = disp.clone();
 	int numRows = disp.rows, numCols = disp.cols;
+	const int PATCHRADIUS = 17;
 
 	// DO NOT USE PARALLEL FOR HERE !!
 	// IT WILL CAUSE WRITING CONFLICT IN w !!!
@@ -196,7 +198,7 @@ void FastWeightedMedianFilterInvalidPixels(cv::Mat &disp, cv::Mat &validPixelMap
 					for (int y = yc - PATCHRADIUS; y <= yc + PATCHRADIUS; y += STRIDE) {
 						for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE) {
 							if (InBound(y, x, numRows, numCols)
-								&& validPixelMap.at<bool>(y, x)) {
+								&& (!useValidPixelOnly || validPixelMap.at<bool>(y, x))) {
 								float w = expTable[L1Dist(center, img.at<cv::Vec3b>(y, x))];
 								depthWeightPairs.push_back(std::make_pair(disp.at<float>(y, x), w));
 							}

@@ -171,6 +171,36 @@ static void EvaluateDisparityMidd3(cv::Mat &disp, void *ptrEvalParams)
 
 	extern std::string midd3TestCaseId;
 	extern std::string midd3Resolution;
+
+	bool FileExist(std::string filePath);
+	if (!FileExist("D:/data/MiddEval3/" + midd3Resolution + "/" + midd3TestCaseId + "/disp0GT.pfm")) {
+		extern int VISUALIZE_EVAL;
+		if (VISUALIZE_EVAL) {
+			ARAPEvalParams *evalParams = (ARAPEvalParams*)(ptrEvalParams);
+			float numDisps = evalParams->numDisps;
+
+#if 1
+			MCImg<SlantedPlane> slantedPlanesL(disp.rows, disp.cols);
+			MCImg<float> bestCostsL(disp.rows, disp.cols);
+			slantedPlanesL.LoadFromBinaryFile("d:/pixelwiseSlantedPlanesL.bin");
+			bestCostsL.LoadFromBinaryFile("d:/pixelwiseBestCostsL.bin");
+			evalParams->pixelwiseSlantedPlanesL = &slantedPlanesL;
+			evalParams->pixelwiseBestCostsL = &bestCostsL;
+#endif
+			
+			cv::Mat Float2ColorJet(cv::Mat &fimg, float dmin, float dmax);
+			cv::Mat dispImg = Float2ColorJet(disp, 0, numDisps);
+			cv::imshow("dispImg", dispImg);
+			evalParams->canvas = &dispImg;
+			void OnMouseComparePixelwiseAndSegmentwisePM(int event, int x, int y, int flags, void *param);
+			cv::setMouseCallback("dispImg", OnMouseComparePixelwiseAndSegmentwisePM, ptrEvalParams);
+			cv::waitKey(0);
+			
+		}
+		return;
+	}
+
+
 	cv::Mat ReadFilePFM(std::string filePath);
 	cv::Mat GT   = ReadFilePFM("D:/data/MiddEval3/" + midd3Resolution + "/" + midd3TestCaseId + "/disp0GT.pfm");
 	cv::Mat MASK = cv::imread( "D:/data/MiddEval3/" + midd3Resolution + "/" + midd3TestCaseId + "/mask0nocc.png", CV_LOAD_IMAGE_UNCHANGED);

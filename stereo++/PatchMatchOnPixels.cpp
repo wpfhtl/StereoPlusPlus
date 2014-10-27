@@ -6,6 +6,7 @@
 #include "Timer.h"
 #include "SlantedPlane.h"
 #include "PostProcess.h"
+#include "ReleaseAssert.h"
 
 
 
@@ -70,11 +71,13 @@ static void PropagateAndRandomSearch(int round, int sign, float maxDisp, cv::Poi
 	}
 
 	// View Propagation
+#if 0
 	int xMatch = 0.5 + x + sign * slantedPlanesL[y][x].ToDisparity(y, x);
 	if (0 <= xMatch && xMatch < numCols) {
 		SlantedPlane newGuess = SlantedPlane::ConstructFromOtherView(slantedPlanesL[y][x], sign);
 		ImproveGuess(y, xMatch, slantedPlanesR[y][xMatch], newGuess, bestCostsR.at<float>(y, xMatch), -sign);
 	}
+#endif
 }
 
 static void PatchMatchRandomInit(MCImg<SlantedPlane> &slantedPlanes, cv::Mat &bestCosts, float maxDisp, int sign)
@@ -242,7 +245,7 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 
 
 	// Step 2 - Spatial propagation and random search
-	for (int round = 0; round < MAX_PATCHMATCH_ITERS; round++) {
+	for (int round = 0; round < /*2*/MAX_PATCHMATCH_ITERS; round++) {
 
 		bs::Timer::Tic("Left View");
 		#pragma omp parallel for
@@ -283,10 +286,25 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 	cv::Mat dispCrossCheckedL = SetInvalidDisparityToZeros(dispL, validPixelL);
 	cv::Mat dispCrossCheckedR = SetInvalidDisparityToZeros(dispR, validPixelR);
 
+
+	slantedPlanesL.SaveToBinaryFile("d:/pixelwiseSlantedPlanesL.bin");
+	ASSERT(bestCostsL.isContinuous());
+	MCImg<float> mcimgBestCostL(numRows, numCols, 1, (float*)bestCostsL.data);
+	mcimgBestCostL.SaveToBinaryFile("d:/pixelwiseBestCostsL.bin");
+
 	// Step 3 - Cross check and post-process
 	cv::Mat dispWmfL = dispL.clone();
 	cv::Mat dispWmfR = dispR.clone();
 	PatchMatchOnPixelPostProcess(slantedPlanesL, slantedPlanesR, imL, imR, dispWmfL, dispWmfR);
+
+	cv::Mat Float2ColorJet(cv::Mat &fimg, float dmin, float dmax);
+	cv::imwrite(filePathImageOut + "_colorjet_dispL.png", Float2ColorJet(dispL, 0, numDisps));
+	cv::imwrite(filePathImageOut + "_colorjet_dispR.png", Float2ColorJet(dispR, 0, numDisps));
+	cv::imwrite(filePathImageOut + "_colorjet_dispCrossCheckedL.png", Float2ColorJet(dispCrossCheckedL, 0, numDisps));
+	cv::imwrite(filePathImageOut + "_colorjet_dispCrossCheckedR.png", Float2ColorJet(dispCrossCheckedR, 0, numDisps));
+	cv::imwrite(filePathImageOut + "_colorjet_dispWmfL.png", Float2ColorJet(dispWmfL, 0, numDisps));
+	cv::imwrite(filePathImageOut + "_colorjet_dispWmfR.png", Float2ColorJet(dispWmfR, 0, numDisps));
+
 
 	dispL.convertTo(dispL, CV_16UC1, upFactor);
 	dispR.convertTo(dispR, CV_16UC1, upFactor);
@@ -299,8 +317,8 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 	cv::imwrite(filePathImageOut + "_dispR.png", dispR);
 	cv::imwrite(filePathImageOut + "_dispCrossCheckedL.png", dispCrossCheckedL);
 	cv::imwrite(filePathImageOut + "_dispCrossCheckedR.png", dispCrossCheckedR);
-	cv::imwrite(filePathImageOut + "_wmfL.png", dispWmfL);
-	cv::imwrite(filePathImageOut + "_wmfR.png", dispWmfR);
+	cv::imwrite(filePathImageOut + "_dispWmfL.png", dispWmfL);
+	cv::imwrite(filePathImageOut + "_dispWmfR.png", dispWmfR);
 
 	//PatchMatchOnPixelEvalParams evalParams;
 	//evalParams.slantedPlanes = &slantedPlanesL;

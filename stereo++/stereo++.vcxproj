@@ -182,6 +182,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ARAP.cpp" />
+    <ClCompile Include="BoostResults.cpp" />
     <ClCompile Include="BP.cpp" />
     <ClCompile Include="BPOnFactorGraph.cpp" />
     <ClCompile Include="daisy-1.8.1\src\corecv.cpp" />
@@ -195,6 +196,7 @@
     <ClCompile Include="daisy-1.8.1\src\interaction.cpp" />
     <ClCompile Include="daisy-1.8.1\src\main.cpp" />
     <ClCompile Include="daisy-1.8.1\src\progress_bar.cpp" />
+    <ClCompile Include="disp2colorjet.cpp" />
     <ClCompile Include="EvalParams.h" />
     <ClCompile Include="Evaluation.cpp" />
     <ClCompile Include="GC.cpp" />
@@ -205,7 +207,7 @@
     <ClCompile Include="gco-v3.0\maxflow.cpp" />
     <ClCompile Include="GlobalParams.cpp" />
     <ClCompile Include="GroundTruthStatistics.cpp" />
-    <ClCompile Include="ioPfm.cpp" />
+    <ClCompile Include="iopfm.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MatchingCost.cpp" />
     <ClCompile Include="MeanShift\ms.cpp" />
@@ -236,7 +238,7 @@
     <ClCompile Include="TestEigen.cpp" />
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="Triangulate2D.cpp" />
-    <ClCompile Include="wmf_main.cpp" />
+    <ClCompile Include="other_mains.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="MeanShift\MSReadme.txt" />
