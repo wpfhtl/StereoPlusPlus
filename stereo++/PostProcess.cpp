@@ -194,7 +194,8 @@ void FastWeightedMedianFilterInvalidPixels(cv::Mat &disp,
 				std::vector<std::pair<float, float>> depthWeightPairs;
 				depthWeightPairs.reserve(2 * PATCHWIDTH * PATCHWIDTH);
 
-				for (int STRIDE = 1; STRIDE <= 2; STRIDE++) {
+				// Use a normal wmf in a 35x35 window.
+				for (int STRIDE = 1; STRIDE <= 1; STRIDE++) {
 					for (int y = yc - PATCHRADIUS; y <= yc + PATCHRADIUS; y += STRIDE) {
 						for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE) {
 							if (InBound(y, x, numRows, numCols)

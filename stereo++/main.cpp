@@ -75,50 +75,60 @@ int ReadCalibFile(std::string filePath)
 int main(int argc, char **argv)
 {
 	if (argc < 2) {
-		printf("usage: .exe Midd3 midd3Resolution midd3TestCaseId numRegions DO_EVAL VISUALIZE_EVAL outImagePath\n");
-		printf("usage: .exe Midd3 kittiTestCaseId numRegions DO_EVAL VISUALIZE_EVAL outImagePath [leftOraclePath rightOraclePath]\n");
+		printf("usage: .exe filePathStereoParams Midd3 midd3Resolution midd3TestCaseId numRegions DO_EVAL VISUALIZE_EVAL outImagePath\n");
+		printf("usage: .exe filePathStereoParams Midd3 kittiTestCaseId numRegions DO_EVAL VISUALIZE_EVAL outImagePath [leftOraclePath rightOraclePath]\n");
 		exit(-1);
 	}
+
+	void ReadStereoParameters(std::string filePathStereoParams);
+	std::string filePathStereoParams = argv[1];
+	if (filePathStereoParams == "NULL") {
+		filePathStereoParams = "d:/data/stereo_params.txt";
+	}
+	ReadStereoParameters(filePathStereoParams);
+
 
 	extern int DO_EVAL;
 	extern int VISUALIZE_EVAL;
 	extern int NUM_PREFERED_REGIONS;;
 	extern int gNumDisps;
 	std::string filePathImageL, filePathImageR, filePathOutImage;
-
-	std::string benchmark = argv[1];
+ 
+	std::string benchmark = argv[2];
 	if (benchmark == "Midd3") {
 		extern std::string midd3Resolution;
 		extern std::string midd3TestCaseId;
+		extern std::string midd3BasePath;
 		bool FileExist(std::string filePath);
 
-		midd3Resolution			= argv[2];
-		midd3TestCaseId			= argv[3];
-		NUM_PREFERED_REGIONS	= atoi(argv[4]);
-		DO_EVAL					= atoi(argv[5]);
-		VISUALIZE_EVAL			= atoi(argv[6]);
-		filePathOutImage		= argv[7];
-		filePathImageL = "D:\\data\\MiddEval3\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\im0.png";
-		filePathImageR = "D:\\data\\MiddEval3\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\im1_rectified.png";
+		midd3Resolution			= argv[3];
+		midd3TestCaseId			= argv[4];
+		NUM_PREFERED_REGIONS	= atoi(argv[5]);
+		DO_EVAL					= atoi(argv[6]);
+		VISUALIZE_EVAL			= atoi(argv[7]);
+		filePathOutImage		= argv[8];
+
+		filePathImageL = midd3BasePath + "\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\im0.png";
+		filePathImageR = midd3BasePath + "\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\im1_rectified.png";
 		
 		if (!FileExist(filePathImageR)) {
-			filePathImageR = "D:\\data\\MiddEval3\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\im1.png";
+			filePathImageR = midd3BasePath + "\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\im1.png";
 		}
 
-		gNumDisps = ReadCalibFile("D:\\data\\MiddEval3\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\calib.txt");
+		gNumDisps = ReadCalibFile(midd3BasePath + "\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\calib.txt");
 	}
 	if (benchmark == "KITTI") {
 		extern std::string kittiTestCaseId;
 
-		kittiTestCaseId			= argv[2];
-		NUM_PREFERED_REGIONS	= atoi(argv[3]);
-		DO_EVAL					= atoi(argv[4]);
-		VISUALIZE_EVAL			= atoi(argv[5]);
-		filePathOutImage		= argv[6];
+		kittiTestCaseId			= argv[3];
+		NUM_PREFERED_REGIONS	= atoi(argv[4]);
+		DO_EVAL					= atoi(argv[5]);
+		VISUALIZE_EVAL			= atoi(argv[6]);
+		filePathOutImage		= argv[7];
 		if (argc == 9) {
 			extern std::string gFilePathOracleL, gFilePathOracleR;
-			gFilePathOracleL	= argv[7];
-			gFilePathOracleR	= argv[8];
+			gFilePathOracleL	= argv[8];
+			gFilePathOracleR	= argv[9];
 		}
 		filePathImageL = "D:\\data\\KITTI\\training\\colored_0\\" + kittiTestCaseId + ".png";
 		filePathImageR = "D:\\data\\KITTI\\training\\colored_1\\" + kittiTestCaseId + ".png";

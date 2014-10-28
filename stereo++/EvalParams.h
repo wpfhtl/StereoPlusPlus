@@ -27,7 +27,7 @@ struct ARAPEvalParams {
 	std::vector<float> *u;
 	std::vector<std::vector<int>> *nbGraph;
 	std::vector<std::vector<cv::Point2i>> *segPixelLists;
-	MCImg<float> *dsiL;
+	MCImg<unsigned short> *dsiL;
 	int numDisps;
 	MCImg<SlantedPlane> *pixelwiseSlantedPlanesL;
 	MCImg<float> *pixelwiseBestCostsL;

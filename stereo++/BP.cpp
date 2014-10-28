@@ -21,8 +21,8 @@ extern enum MatchingCostType	{ ADGRADIENT, ADCENSUS };
 extern CostAggregationType	gCostAggregationType;
 extern MatchingCostType		gMatchingCostType;
 
-extern MCImg<float>			gDsiL;
-extern MCImg<float>			gDsiR;
+extern MCImg<unsigned short>			gDsiL;
+extern MCImg<unsigned short>			gDsiR;
 extern MCImg<float>			gSimWeightsL;
 extern MCImg<float>			gSimWeightsR;
 extern MCImg<SimVector>		gSimVecsL;

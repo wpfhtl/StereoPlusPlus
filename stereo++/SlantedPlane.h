@@ -34,11 +34,20 @@ struct SlantedPlane {
 			p.ny = -p.ny;
 			p.nz = -p.nz;
 		}
+		
+		///*if (std::abs(p.nz) < eps) {
+		//	if (p.nz > 0)	p.nz = +eps;
+		//	else			p.nz = -eps;
+		//}*/
+		
+		// normalize the normal
+		float len = std::sqrt(p.nx*p.nx + p.ny*p.ny + p.nz*p.nz);
+		len = std::max(1e-4f, len);
+		p.nx /= len;
+		p.ny /= len;
+		p.nz /= len;
 		p.nz = std::max(eps, p.nz);
-		/*if (std::abs(p.nz) < eps) {
-			if (p.nz > 0)	p.nz = +eps;
-			else			p.nz = -eps;
-		}*/
+
 		p.a = -p.nx / p.nz;
 		p.b = -p.ny / p.nz;
 		p.c = (p.nx * x + p.ny * y + p.nz * z) / p.nz;

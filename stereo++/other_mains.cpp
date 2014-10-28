@@ -313,3 +313,59 @@ int main(int argc, char **argv)
 	return 0;
 }
 #endif
+
+#if 0
+int main(int argc, char **argv)
+{
+	if (argc != 6) {
+		printf("usage: %s.exe filePathRGB filePathOut numRegionis compactness showImmediately", argv[0]);
+		exit(-1);
+	}
+	std::string filePathRGB = argv[1];
+	std::string filePathOut = argv[2];
+	int numPreferedRegions = atoi(argv[3]);
+	float compactness = atof(argv[4]);
+	int showImmediately = atoi(argv[5]);
+
+	printf("numRegions = %d\n", numPreferedRegions);
+	printf("compactness = %f\n", compactness);
+
+
+	int SLICSegmentation(const cv::Mat &img, const int numPreferedRegions, const int compactness, cv::Mat& labelMap, cv::Mat& contourImg);
+	cv::Mat DrawSegmentImage(cv::Mat &labelMap);
+	std::vector<cv::Vec3b> ComupteSegmentMeanLabColor(cv::Mat &labImg, cv::Mat &labelMap, int numSegs);
+
+	cv::Mat img = cv::imread(filePathRGB);
+	cv::Mat labelMap, contourImg;
+	int numRegions = SLICSegmentation(img, numPreferedRegions, compactness, labelMap, contourImg);
+	std::vector<cv::Vec3b> meanColors = ComupteSegmentMeanLabColor(img, labelMap, numRegions);
+
+	
+	cv::Mat segImg = DrawSegmentImage(labelMap);
+	cv::Mat smoothedImg = img.clone();
+	for (int y = 0; y < img.rows; y++) {
+		for (int x = 0; x < img.cols; x++) {
+			int id = labelMap.at<int>(y, x);
+			smoothedImg.at<cv::Vec3b>(y, x) = meanColors[id];
+		}
+	}
+
+
+	cv::imwrite(filePathOut + "_colorImg.png", img);
+	cv::imwrite(filePathOut + "_segImg.png", segImg);
+	cv::imwrite(filePathOut + "_smoothedImg.png", smoothedImg);
+	cv::imwrite(filePathOut + "_contourImg.png", contourImg);
+
+	if (showImmediately) {
+		cv::imshow("tmp", img);
+		cv::waitKey(0);
+		cv::imshow("tmp", smoothedImg);
+		cv::waitKey(0);
+		cv::imshow("tmp", contourImg);
+		cv::waitKey(0);
+	}
+
+
+	return 0;
+}
+#endif

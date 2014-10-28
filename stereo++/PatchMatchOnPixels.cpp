@@ -22,12 +22,12 @@ extern enum MatchingCostType	{ ADGRADIENT, ADCENSUS };
 extern CostAggregationType	gCostAggregationType;
 extern MatchingCostType		gMatchingCostType;
 
-extern MCImg<float>			gDsiL;
-extern MCImg<float>			gDsiR;
-extern MCImg<float>			gSimWeightsL;
-extern MCImg<float>			gSimWeightsR;
-extern MCImg<SimVector>		gSimVecsL;
-extern MCImg<SimVector>		gSimVecsR;
+//extern MCImg<float>			gDsiL;
+//extern MCImg<float>			gDsiR;
+//extern MCImg<float>			gSimWeightsL;
+//extern MCImg<float>			gSimWeightsR;
+//extern MCImg<SimVector>		gSimVecsL;
+//extern MCImg<SimVector>		gSimVecsR;
 
 
 
@@ -164,6 +164,9 @@ void PatchMatchOnPixelPostProcess(MCImg<SlantedPlane> &slantedPlanesL, MCImg<Sla
 	bs::Timer::Toc();
 }
 
+template <typename T> void CostVolumeFromYamaguchi(std::string &leftFilePath, std::string &rightFilePath,
+	MCImg<T> &dsiL, MCImg<T> &dsiR, int numDisps);
+
 void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR,
 	std::string filePathImageL, std::string filePathImageR, std::string filePathImageOut)
 {
@@ -181,7 +184,10 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 	printf("tensorSize: %lf\n", tensorSize);
 	printf("numDisps: %d\n", numDisps);
 
-	if (tensorSize > 1000/*rootFolder == "Midd3"*/) {
+	if (tensorSize > 1200/*rootFolder == "Midd3"*/) {
+		printf("*********************************************************\n");
+		printf("WARNING: tensor size too large, using online calculation!");
+		printf("*********************************************************\n");
 		extern cv::Mat gSobelImgL, gSobelImgR, gCensusImgL, gCensusImgR;
 		cv::Mat ComputeCappedSobelImage(cv::Mat &imgIn, int sobelCapValue);
 		gSobelImgL = ComputeCappedSobelImage(imL, 15);
@@ -190,13 +196,14 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 		gCensusImgR = ComputeCensusImage(imR, 2, 2);
 	}
 	else {
-		extern MCImg<float> gDsiL, gDsiR;
-		gDsiL = MCImg<float>(numRows, numCols, numDisps);
-		gDsiR = MCImg<float>(numRows, numCols, numDisps);
-		void CostVolumeFromYamaguchi(std::string &leftFilePath, std::string &rightFilePath,
-			MCImg<float> &dsiL, MCImg<float> &dsiR, int numDisps);
+		extern MCImg<unsigned short> gDsiL, gDsiR;
+		gDsiL = MCImg<unsigned short>(numRows, numCols, numDisps);
+		gDsiR = MCImg<unsigned short>(numRows, numCols, numDisps);
+		/*void CostVolumeFromYamaguchi(std::string &leftFilePath, std::string &rightFilePath,
+			MCImg<unsigned short> &dsiL, MCImg<unsigned short> &dsiR, int numDisps);*/
 		printf("%s\n%s\n", filePathImageL.c_str(), filePathImageR.c_str());
-		CostVolumeFromYamaguchi(filePathImageL, filePathImageR, gDsiL, gDsiR, numDisps);
+		
+		CostVolumeFromYamaguchi<unsigned short>(filePathImageL, filePathImageR, gDsiL, gDsiR, numDisps);
 
 		//MCImg<float> ComputeBirchfieldTomasiCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign);
 		//MCImg<float> Compute5x5CensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign);

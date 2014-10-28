@@ -528,7 +528,7 @@ void OnMouseTestPlanefitMidd3(int event, int x, int y, int flags, void *param)
 
 
 		// Compute matching cost of this region
-		MCImg<float> &dsiL = *evalParams->dsiL;
+		MCImg<unsigned short> &dsiL = *evalParams->dsiL;
 		if (dsiL.data == NULL) {
 			cv::imshow("cmpImg", tmpCanvas);
 			return;
@@ -679,7 +679,7 @@ void OnMouseComparePixelwiseAndSegmentwisePM(int event, int x, int y, int flags,
 		int xc = baryCenters[id].y + 0.5;
 		
 		float ConstrainedPatchMatchCost(float yc, float xc, SlantedPlane &newGuess,
-			cv::Vec3f &mL, float vL, float maxDisp, float theta, int sign);
+			cv::Vec3f mL, float vL, float maxDisp, float theta, int sign);
 		float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int sign);
 
 		int maxDisp = evalParams->numDisps - 1;

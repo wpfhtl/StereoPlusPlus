@@ -30,8 +30,10 @@ public:
 
 
 
-MCImg<float>				gDsiL;
-MCImg<float>				gDsiR;
+//MCImg<float>				gDsiL;
+//MCImg<float>				gDsiR;
+MCImg<unsigned short>		gDsiL;
+MCImg<unsigned short>		gDsiR;
 MCImg<float>				gSimWeightsL;
 MCImg<float>				gSimWeightsR;
 MCImg<SimVector>			gSimVecsL;
@@ -45,6 +47,7 @@ int NUM_PREFERED_REGIONS = 4000;
 std::string gFilePathOracleL, gFilePathOracleR;
 cv::Mat gDispSGML, gDispSGMR;
 std::string midd3Resolution, midd3TestCaseId;
+std::string midd3BasePath = "D:\\data\\MiddEval3";
 std::string kittiTestCaseId;
 std::vector<std::vector<cv::Point2i>> gSegPixelListsL, gSegPixelListsR;
 std::vector<std::vector<int>> segAnchorIndsL, segAnchorIndsR;
@@ -93,25 +96,31 @@ float						ARAP_THETASCALE;
 float						ARAP_THETAOFFSET;
 int							ARAP_MAX_ITERS;
 int							ARAP_NUM_ANCHORS;
+int							ARAP_INIT_PATCHMATCH_ITERS = 8;
 int							SEGMENT_LEN;
 float						ARAP_CENSUS_WEIGHT;
+float						SLIC_COMPACTNESS = 20.f;
+int							MATCHINGCOST_STRIDE = 1;
+float						ARAP_NORMALDIFF_TRUNCATION = 4;
+float						ARAP_DISPDIFF_TRUNCATION = 500;
 
 
+//struct GlobalParamsInitializer
+//{
+//	GlobalParamsInitializer();
+//}
+//autoInitObj;
 
+  
 
-struct GlobalParamsInitializer
+//GlobalParamsInitializer::GlobalParamsInitializer()
+void ReadStereoParameters(std::string filePathStereoParams = "")
 {
-	GlobalParamsInitializer();
-}
-autoInitObj;
-
-
-
-GlobalParamsInitializer::GlobalParamsInitializer()
-{
-	//return;
-	std::string paramFilePath = "d:/data/stereo_params.txt";
-	FILE *fid = fopen(paramFilePath.c_str(), "r");
+	if (filePathStereoParams == "") {
+		filePathStereoParams = "d:/data/stereo_params.txt";
+	}
+	printf("filePathStereoParams: %s\n", filePathStereoParams.c_str());
+	FILE *fid = fopen(filePathStereoParams.c_str(), "r");
 	ASSERT(fid != NULL);
 
 	char keyStr[1024], valStr[1024], lineBuf[1024];
@@ -252,8 +261,32 @@ GlobalParamsInitializer::GlobalParamsInitializer()
 			sscanf(valStr, "%f", &ARAP_CENSUS_WEIGHT);
 			printf("%20s = %f\n", "ARAP_CENSUS_WEIGHT", ARAP_CENSUS_WEIGHT);
 		}
-		
+		else if (std::string(keyStr) == "ARAP_INIT_PATCHMATCH_ITERS") {
+			sscanf(valStr, "%d", &ARAP_INIT_PATCHMATCH_ITERS);
+			printf("%20s = %d\n", "ARAP_INIT_PATCHMATCH_ITERS", ARAP_INIT_PATCHMATCH_ITERS);
+		}
+		else if (std::string(keyStr) == "SLIC_COMPACTNESS") {
+			sscanf(valStr, "%f", &SLIC_COMPACTNESS);
+			printf("%20s = %f\n", "SLIC_COMPACTNESS", SLIC_COMPACTNESS);
+		}
+		else if (std::string(keyStr) == "MATCHINGCOST_STRIDE") {
+			sscanf(valStr, "%d", &MATCHINGCOST_STRIDE);
+			printf("%20s = %d\n", "MATCHINGCOST_STRIDE", MATCHINGCOST_STRIDE);
+		}
+		else if (std::string(keyStr) == "ARAP_NORMALDIFF_TRUNCATION") {
+			sscanf(valStr, "%f", &ARAP_NORMALDIFF_TRUNCATION);
+			printf("%20s = %f\n", "ARAP_NORMALDIFF_TRUNCATION", ARAP_NORMALDIFF_TRUNCATION);
+		}
+		else if (std::string(keyStr) == "ARAP_DISPDIFF_TRUNCATION") {
+			sscanf(valStr, "%f", &ARAP_DISPDIFF_TRUNCATION);
+			printf("%20s = %f\n", "ARAP_DISPDIFF_TRUNCATION", ARAP_DISPDIFF_TRUNCATION);
+		}
+		else if (std::string(keyStr) == "midd3BasePath") {
+			midd3BasePath = std::string(valStr);
+			printf("%20s = %s\n", "midd3BasePath", midd3BasePath.c_str());
+		}
 	}
 	
+
 	fclose(fid);
 }

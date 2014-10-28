@@ -23,8 +23,8 @@ extern enum MatchingCostType		{ ADGRADIENT, ADCENSUS };
 extern CostAggregationType			gCostAggregationType;
 extern MatchingCostType				gMatchingCostType;
 
-extern MCImg<float>			gDsiL;
-extern MCImg<float>			gDsiR;
+extern MCImg<unsigned short>			gDsiL;
+extern MCImg<unsigned short>			gDsiR;
 extern MCImg<float>			gSimWeightsL;
 extern MCImg<float>			gSimWeightsR;
 extern MCImg<SimVector>		gSimVecsL;
@@ -437,10 +437,11 @@ inline float __slantedPlaneCost(int yc, int xc, int numRows, int numCols, cv::Ma
 {
 	float totalCost = 0.f;
 	float accWeight = 0.f;
-	for (int STRIDE = 1; STRIDE <= 1; STRIDE++) {
+	extern int MATCHINGCOST_STRIDE;
+	for (int STRIDE = 1; STRIDE <= MATCHINGCOST_STRIDE; STRIDE++) {
 		cv::Vec3b center = img.at<cv::Vec3b>(yc, xc);
-		for (int y = yc - PATCHRADIUS; y <= yc + PATCHRADIUS; y += STRIDE) {
-			for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE) {
+		for (int y = yc - STRIDE * PATCHRADIUS; y <= yc + STRIDE * PATCHRADIUS; y += STRIDE) {
+			for (int x = xc - STRIDE * PATCHRADIUS; x <= xc + STRIDE * PATCHRADIUS; x += STRIDE) {
 				if (InBound(y, x, numRows, numCols)) {
 					cv::Vec3b &c = img.at<cv::Vec3b>(y, x);
 					float w = gExpTable[L1Dist(c, center)];
@@ -481,7 +482,7 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 		//printf("sdfsdfsdf\n");
 		extern cv::Mat gLabelMapL, gLabelMapR;
 
-		MCImg<float> &dsi = (sign == -1 ? gDsiL : gDsiR);
+		MCImg<unsigned short> &dsi = (sign == -1 ? gDsiL : gDsiR);
 		cv::Mat &img = (sign == -1 ? gImLabL : gImLabR);
 		cv::Mat &labelMap = (sign == -1 ? gLabelMapL : gLabelMapR);
 		int numRows = dsi.h, numCols = dsi.w, maxLevel = dsi.n - 1;
@@ -493,9 +494,10 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 		float totalCost = 0.f, accWeight = 0.f;
 
 #if 1
-		for (int STRIDE = 1; STRIDE <= 1; STRIDE++) {
-			for (int y = yc - PATCHRADIUS; y <= yc + PATCHRADIUS; y += STRIDE) {
-				for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE) {
+		extern int MATCHINGCOST_STRIDE;
+		for (int STRIDE = 1; STRIDE <= MATCHINGCOST_STRIDE; STRIDE++) {
+			for (int y = yc - STRIDE * PATCHRADIUS; y <= yc + STRIDE * PATCHRADIUS; y += STRIDE) {
+				for (int x = xc - STRIDE * PATCHRADIUS; x <= xc + STRIDE * PATCHRADIUS; x += STRIDE) {
 					if (InBound(y, x, numRows, numCols)) {
 						cv::Vec3b &c = img.at<cv::Vec3b>(y, x);
 						float w = gExpTable[L1Dist(c, center)];
@@ -563,13 +565,12 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 		//cv::Mat &labImgR	= (sign == -1 ? gImLabR : gImLabL);
 
 		int numRows = labImg.rows, numCols = labImg.cols;
-		const int STRIDE = 1;
 		cv::Vec3b center = labImg.at<cv::Vec3b>(yc, xc);
 		float totalCost = 0.f, accWeight = 0.f;
-
-		for (int STRIDE = 1; STRIDE <= 1; STRIDE++) {
-			for (int y = yc - PATCHRADIUS; y <= yc + PATCHRADIUS; y += STRIDE) {
-				for (int x = xc - PATCHRADIUS; x <= xc + PATCHRADIUS; x += STRIDE) {
+		extern int MATCHINGCOST_STRIDE;
+		for (int STRIDE = 1; STRIDE <= MATCHINGCOST_STRIDE; STRIDE++) {
+			for (int y = yc - STRIDE * PATCHRADIUS; y <= yc + STRIDE * PATCHRADIUS; y += STRIDE) {
+				for (int x = xc - STRIDE * PATCHRADIUS; x <= xc + STRIDE * PATCHRADIUS; x += STRIDE) {
 					if (InBound(y, x, numRows, numCols)) {
 						cv::Vec3b &c = labImg.at<cv::Vec3b>(y, x);
 						/*	float w = 1.f;
@@ -653,7 +654,7 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 
 
 
-	MCImg<float> &dsi			= (sign == -1 ? gDsiL : gDsiR);
+	MCImg<unsigned short> &dsi = (sign == -1 ? gDsiL : gDsiR);
 	MCImg<float> &simWeights	= (sign == -1 ? gSimWeightsL : gSimWeightsR);
 	MCImg<SimVector> &simVecs	= (sign == -1 ? gSimVecsL : gSimVecsR);
 
@@ -714,6 +715,7 @@ void InitGlobalColorGradientFeatures(cv::Mat &imL, cv::Mat &imR)
 
 void InitGlobalDsiAndSimWeights(cv::Mat &imL, cv::Mat &imR, int numDisps)
 {
+#if 0
 	extern cv::Mat gImLabL, gImLabR;
 	gImLabL = imL.clone();
 	gImLabR = imR.clone();
@@ -751,4 +753,5 @@ void InitGlobalDsiAndSimWeights(cv::Mat &imL, cv::Mat &imR, int numDisps)
 		gSimVecsR = MCImg<SimVector>(numRows, numCols, 1, &simVecsStdR[0]);
 		bs::Timer::Toc();
 	}
+#endif
 }
