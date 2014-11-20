@@ -72,11 +72,88 @@ int ReadCalibFile(std::string filePath)
 	return numDisps;
 }
 
+#if 0
+using namespace cv;
+
+/// Global variables
+
+Mat src, src_gray;
+Mat dst, detected_edges;
+
+int edgeThresh = 1;
+int lowThreshold;
+int const max_lowThreshold = 100;
+int ratio = 3;
+int kernel_size = 3;
+char* window_name = "Edge Map";
+
+/**
+* @function CannyThreshold
+* @brief Trackbar callback - Canny thresholds input with a ratio 1:3
+*/
+void CannyThreshold(int, void*)
+{
+	/// Reduce noise with a kernel 3x3
+	blur(src_gray, detected_edges, Size(3, 3));
+
+	/// Canny detector
+	Canny(detected_edges, detected_edges, lowThreshold, lowThreshold*ratio, kernel_size);
+
+	/// Using Canny's output as a mask, we display our result
+	dst = Scalar::all(0);
+
+	src.copyTo(dst, detected_edges);
+	imshow(window_name, dst);
+}
+
+
+/** @function main */
+int main(int argc, char** argv)
+{
+	/// Load an image
+	src = imread(argv[1]);
+
+	if (!src.data)
+	{
+		return -1;
+	}
+
+	/// Create a matrix of the same type and size as src (for dst)
+	dst.create(src.size(), src.type());
+
+	/// Convert the image to grayscale
+	cvtColor(src, src_gray, CV_BGR2GRAY);
+
+	/// Create a window
+	namedWindow(window_name, CV_WINDOW_AUTOSIZE);
+
+	/// Create a Trackbar for user to enter threshold
+	createTrackbar("Min Threshold:", window_name, &lowThreshold, max_lowThreshold, CannyThreshold);
+
+	/// Show the image
+	CannyThreshold(0, 0);
+
+	/// Wait until user exit program by pressing a key
+	waitKey(0);
+
+	return 0;
+}
+#endif
+#if 0
 int main(int argc, char **argv)
 {
+	//void ImageDomainTessellation(cv::Mat &img, std::vector<cv::Point2f> &vertexCoordList,
+	//	std::vector<std::vector<int>> &triVertexIndsList);
+	//cv::Mat img = cv::imread("d:/data/stereo/teddy/im2.png");
+	//std::vector<cv::Point2f> vertexCoodList;
+	//std::vector<std::vector<int>> triVertexIndsList;
+	//ImageDomainTessellation(img, vertexCoodList, triVertexIndsList);
+	//return -1;
+
 	if (argc < 2) {
 		printf("usage: .exe filePathStereoParams Midd3 midd3Resolution midd3TestCaseId numRegions DO_EVAL VISUALIZE_EVAL outImagePath\n");
-		printf("usage: .exe filePathStereoParams Midd3 kittiTestCaseId numRegions DO_EVAL VISUALIZE_EVAL outImagePath [leftOraclePath rightOraclePath]\n");
+		printf("usage: .exe filePathStereoParams KITTI kittiTestCaseId numRegions DO_EVAL VISUALIZE_EVAL outImagePath [leftOraclePath rightOraclePath]\n");
+		printf("usage: .exe filePathStereoParams Herodion numDisps regions leftPath rightpath outPath");
 		exit(-1);
 	}
 
@@ -117,7 +194,26 @@ int main(int argc, char **argv)
 
 		gNumDisps = ReadCalibFile(midd3BasePath + "\\" + midd3Resolution + "\\" + midd3TestCaseId + "\\calib.txt");
 	}
+	if (benchmark == "Midd2") {
+		extern std::string midd3Resolution;
+		extern std::string midd3TestCaseId;
+		extern std::string midd3BasePath;
+		bool FileExist(std::string filePath);
+
+		midd3Resolution = argv[3];
+		midd3TestCaseId = argv[4];
+		NUM_PREFERED_REGIONS = atoi(argv[5]);
+		DO_EVAL = atoi(argv[6]);
+		VISUALIZE_EVAL = atoi(argv[7]);
+		filePathOutImage = argv[8];
+
+		filePathImageL = "d:/data/midd2/thirdSize/" + midd3TestCaseId + "/view1.png";
+		filePathImageR = "d:/data/midd2/thirdSize/" + midd3TestCaseId + "/view5.png";
+
+		gNumDisps = 80;
+	}
 	if (benchmark == "KITTI") {
+		extern std::string kittiBasePath;
 		extern std::string kittiTestCaseId;
 
 		kittiTestCaseId			= argv[3];
@@ -130,10 +226,19 @@ int main(int argc, char **argv)
 			gFilePathOracleL	= argv[8];
 			gFilePathOracleR	= argv[9];
 		}
-		filePathImageL = "D:\\data\\KITTI\\training\\colored_0\\" + kittiTestCaseId + ".png";
-		filePathImageR = "D:\\data\\KITTI\\training\\colored_1\\" + kittiTestCaseId + ".png";
+		filePathImageL = kittiBasePath + "\\training\\colored_0\\" + kittiTestCaseId + ".png";
+		filePathImageR = kittiBasePath + "\\training\\colored_1\\" + kittiTestCaseId + ".png";
 
 		gNumDisps = 256;
+	} 
+	if (benchmark == "Herodion") {
+		gNumDisps				= atoi(argv[3]);
+		NUM_PREFERED_REGIONS	= atoi(argv[4]);
+		filePathImageL			= argv[5];
+		filePathImageR			= argv[6];
+		filePathOutImage		= argv[7];
+		DO_EVAL = 0;
+		VISUALIZE_EVAL = 0;
 	}
 
 	
@@ -192,14 +297,17 @@ int main(int argc, char **argv)
 #endif 
 
 }
-
+#endif
 
 #endif
 
 
 
-
-#if 0
+std::string runId;
+float RENDER_ALPHA;
+int USE_GT_DISP = 0;
+std::string filePathRenderOutput;
+#if 1
 static void PrintProgramEntryHeader(std::string methodName, int id)
 {
 	printf("\n\n========================================================\n");
@@ -207,16 +315,67 @@ static void PrintProgramEntryHeader(std::string methodName, int id)
 	printf("========================================================\n");
 }
 
-std::string runId;
+
+
+void CombineVirtualView();
 
 int main(int argc, char** argv)
 {
+	//if (argc != 3) {
+	//	printf("usage: .exe filePathImageIn filePathImageOut\n");
+	//	exit(-1);
+	//}
+	//void FillRenderHoles(std::string filePathImageIn, std::string filePathImageOut);
+	//FillRenderHoles(argv[1], argv[2]);
+	//return 0;
 
+	
+	//void PutPSNROnImage(int x, int y);
+	//int x = atoi(argv[1]);
+	//int y = atoi(argv[2]);
+	//PutPSNROnImage(x, y);
+	//return -1;
+	//filePathRenderOutput = "herodion.png";
+	//CombineVirtualView();
+	//return -1;
+
+	void ReadStereoParameters(std::string filePathStereoParams);
+	std::string filePathStereoParams = "d:/data/stereo_params.txt";
+	ReadStereoParameters(filePathStereoParams);
+
+	if (argc >= 2) {
+		extern std::string ROOTFOLDER;
+		ROOTFOLDER = argv[1];
+	}
+
+	if (argc >= 3) {
+		RENDER_ALPHA = atof(argv[2]);
+	}
+	else {
+		RENDER_ALPHA = 0.5;
+	}
+	printf("RENDER_ALPHA = %f\n", RENDER_ALPHA);
+
+	if (argc >= 4) {
+		USE_GT_DISP = atoi(argv[3]);
+	}
+
+	if (argc >= 5) {
+		filePathRenderOutput = argv[4];
+	}
+	
 	//extern std::string ROOTFOLDER;
 	//cv::Mat dispLSL = cv::imread("d:/data/stereo/" + ROOTFOLDER + "/GC+LSL.png", CV_LOAD_IMAGE_GRAYSCALE);
 	//dispLSL.convertTo(dispLSL, CV_32FC1, 0.25f);
 	//EvaluateDisparity(ROOTFOLDER, dispLSL, 0.5f);
 	//return 0;
+
+	void RenderByMyself();
+	//RenderByMyself();
+	int RenderByOpenGL();
+	//RenderByOpenGL();
+	//exit(1);
+	
 
 
 	extern int PROGRAM_ENTRY;
@@ -298,3 +457,154 @@ int main(int argc, char** argv)
 	return 0;
 }
 #endif
+
+
+static cv::Mat MYDISP;
+
+void OnMouseCombine(int event, int x, int y, int flags, void *param)
+{
+	//cv::Mat &canvas = *(cv::Mat*)((void**)param)[0];
+	cv::Mat &canvas = *(cv::Mat*)param;
+
+
+	int numRows = canvas.rows, numCols = canvas.cols;
+	numCols /= 2;
+
+	cv::Mat &GT = canvas(cv::Rect(0, 0, numCols, numRows));
+	cv::Mat &MY = canvas(cv::Rect(numCols, 0, numCols, numRows));
+	x %= numCols;
+	y %= numRows;
+
+	if (MYDISP.empty()) {
+		MYDISP = MY.clone();
+	}
+
+
+	if (event == CV_EVENT_LBUTTONDOWN)
+	{
+		const int stride = 15;
+		for (int yy = y - stride; yy <= y + stride; yy++) {
+			for (int xx = x - stride; xx <= x + stride; xx++) {
+				if (InBound(yy, xx, numRows, numCols)) {
+					MY.at<cv::Vec3b>(yy, xx) = GT.at<cv::Vec3b>(yy, xx);
+				}
+			}
+		}
+
+		cv::imshow("canvas", canvas);
+	}
+
+	if (event == CV_EVENT_RBUTTONDOWN)
+	{
+		const int stride = 15;
+		for (int yy = y - stride; yy <= y + stride; yy++) {
+			for (int xx = x - stride; xx <= x + stride; xx++) {
+				if (InBound(yy, xx, numRows, numCols)) {
+					MY.at<cv::Vec3b>(yy, xx) = MYDISP.at<cv::Vec3b>(yy, xx);
+				}
+			}
+		}
+
+		cv::imshow("canvas", canvas);
+	}
+
+	if (event == CV_EVENT_LBUTTONDBLCLK) {
+		cv::imwrite("d:/modified.png", MY);
+		printf("image save.\n");
+	}
+}
+
+void CombineVirtualView()
+{
+	/*std::string filePathGT = "D:/data/CVPR_figures/Books/GT.png";
+	std::string filePathMY = "D:/data/CVPR_figures/Books/Ours.png";*/
+
+	std::string filePathGT = "D:/data/Herodion/camera6_138R.png";
+	std::string filePathMY = "herodion_24.57.png";
+
+	//std::string filePathGT = "D:/data/CVPR_figures/Reindeer/GT.png";
+	//std::string filePathMY = "D:/data/CVPR_figures/Reindeer/ours.png";
+
+	cv::Mat imgGT = cv::imread(filePathGT);
+	cv::Mat imgMY = cv::imread(filePathMY);
+
+	cv::Mat canvas;
+	cv::hconcat(imgGT, imgMY, canvas);
+	cv::imshow("canvas", canvas);
+	cv::setMouseCallback("canvas", OnMouseCombine, &canvas);
+	cv::waitKey(0);
+}
+
+void PutPSNROnImage(int dd, int ss)
+{
+	std::string filePath = "d:/modified.png";
+	cv::Mat img = cv::imread(filePath);
+	int numRows = img.rows, numCols = img.cols;
+	char text[1024];
+	sprintf(text, "%.2f", 25.66f);
+
+	float standardLen = 463.f;
+	float x = 190;
+	float y = 60;
+	x *= (numCols / standardLen);
+	y *= (numCols / standardLen);
+	int thickness = 6 * (numCols / standardLen) + 0.5;
+	float scale = numCols / standardLen * 2;
+
+
+	cv::putText(img, std::string(text), cv::Point2f(numCols - x, y), 0, scale, cv::Scalar(0, 0, 255, 1), thickness, CV_AA);
+	cv::imshow("img", img);
+	cv::imwrite("d:/PSNR.png", img);
+	cv::waitKey(0);
+
+	/*std::string folders[] = { "Books", "Reindeer", "Herodion_Render" };
+	std::string methodNames[] = { "Volume", "TreeFiltering", "Fickel", "Ours" };
+	float standardLen = 463.f;
+
+	float PSNR[3][4] = { { 24.2,
+		25.83,
+		28.41,
+		30.07},
+		{ 25.03,
+		26.03,
+		27.7,
+		31.97 },
+		{
+			21.997,	22.0508,	24.2544,	25.6591
+
+		}
+	};
+
+
+	for (int i = 0; i < 3; i++) {
+		for (int j = 0; j < 4; j++) {
+			std::string filePath = "C:/Users/v-cz/Dropbox/CVPR'15/RenderResults/" + folders[i] + "/" + methodNames[j] + ".png";
+			float psnr = PSNR[i][j];
+
+			cv::Mat img = cv::imread(filePath);
+			int numRows = img.rows, numCols = img.cols;
+			char text[1024];
+			sprintf(text, "%.2f", psnr);
+
+			float x = 190;
+			float y = 60;
+			x *= (numCols / standardLen);
+			y *= (numCols / standardLen);
+
+			int thickness = 6 * (numCols / standardLen) + 0.5;
+
+			float scale = numCols / standardLen * 2;
+			cv::putText(img, std::string(text), cv::Point2f(numCols - x, y), 0, scale, cv::Scalar(0, 0, 255, 1), thickness, CV_AA);
+
+			std::string writePath = "C:/Users/v-cz/Dropbox/CVPR'15/RenderResults/" + folders[i] + "/" + methodNames[j] + "_withPSNR.png";
+			cv::imwrite(writePath, img); 
+
+			std::cout << filePath << "\n";
+		}
+		
+	}
+
+
+	std::string filePath = "C:/Users/v-cz/Dropbox/CVPR'15/RenderResults/Books/Volume.png";
+	*/
+}

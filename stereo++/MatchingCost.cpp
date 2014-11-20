@@ -142,6 +142,15 @@ cv::Mat ComputeGradxyImage(cv::Mat& img)
 	return grad / 255.f;
 }
 
+float L2Dist(const cv::Vec3b &a, const cv::Vec3b &b)
+{
+	return std::sqrt(
+		  ((float)a[0] - b[0]) * ((float)a[0] - b[0])
+		+ ((float)a[1] - b[1]) * ((float)a[1] - b[1])
+		+ ((float)a[2] - b[2]) * ((float)a[2] - b[2])
+		);
+}
+
 int L1Dist(const cv::Vec3b &a, const cv::Vec3b &b)
 {
 	return std::abs((int)a[0] - (int)b[0])
@@ -480,11 +489,10 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 	if (gDsiL.data != NULL/*ROOTFOLDER == "KITTI"*/) {
 
 		//printf("sdfsdfsdf\n");
-		extern cv::Mat gLabelMapL, gLabelMapR;
+		
 
 		MCImg<unsigned short> &dsi = (sign == -1 ? gDsiL : gDsiR);
 		cv::Mat &img = (sign == -1 ? gImLabL : gImLabR);
-		cv::Mat &labelMap = (sign == -1 ? gLabelMapL : gLabelMapR);
 		int numRows = dsi.h, numCols = dsi.w, maxLevel = dsi.n - 1;
 		//int STRIDE = 1;
 		//std::vector<cv::Vec3b> &segMeanColors = (sign == -1 ? gMeanLabColorsL : gMeanLabColorsR);
@@ -513,6 +521,8 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 		}
 		return totalCost / accWeight;
 #else
+		extern cv::Mat gLabelMapL, gLabelMapR;
+		cv::Mat &labelMap = (sign == -1 ? gLabelMapL : gLabelMapR);
 		extern std::vector<std::vector<cv::Point2i>> gSegPixelListsL, gSegPixelListsR;
 		std::vector<std::vector<cv::Point2i>> &segPixelLists = (sign == -1 ? gSegPixelListsL : gSegPixelListsR);
 		int id = labelMap.at<int>(yc, xc);
@@ -530,17 +540,39 @@ float PatchMatchSlantedPlaneCost(int yc, int xc, SlantedPlane &slantedPlane, int
 		totalCost /= pixelList.size();
 		//return totalCost;
 
-		extern std::vector<std::vector<int>> segAnchorIndsL, segAnchorIndsR;
-		std::vector<std::vector<int>> &segAnchorInds = (sign == -1 ? segAnchorIndsL : segAnchorIndsR);
-		std::vector<int> &anchorInds = segAnchorInds[id];
+		//extern std::vector<std::vector<int>> segAnchorIndsL, segAnchorIndsR;
+		//std::vector<std::vector<int>> &segAnchorInds = (sign == -1 ? segAnchorIndsL : segAnchorIndsR);
+		//std::vector<int> &anchorInds = segAnchorInds[id];
+		//float anchorCost = 0.f;
+		//for (int i = 0; i < anchorInds.size(); i++) {
+		//	int yc = pixelList[anchorInds[i]].y;
+		//	int xc = pixelList[anchorInds[i]].x;
+		//	anchorCost += __slantedPlaneCost(yc, xc, numRows, numCols, img,
+		//		slantedPlane, dsi.n - 1, dsi, 1);
+		//}
+		//anchorCost /= anchorInds.size();
+
+
+		extern int MATCHINGCOST_STRIDE;
 		float anchorCost = 0.f;
-		for (int i = 0; i < anchorInds.size(); i++) {
-			int yc = pixelList[anchorInds[i]].y;
-			int xc = pixelList[anchorInds[i]].x;
-			anchorCost += __slantedPlaneCost(yc, xc, numRows, numCols, img,
-				slantedPlane, dsi.n - 1, dsi, 1);
+		accWeight = 0.f;
+		for (int STRIDE = 1; STRIDE <= MATCHINGCOST_STRIDE; STRIDE++) {
+			for (int y = yc - STRIDE * PATCHRADIUS; y <= yc + STRIDE * PATCHRADIUS; y += STRIDE) {
+				for (int x = xc - STRIDE * PATCHRADIUS; x <= xc + STRIDE * PATCHRADIUS; x += STRIDE) {
+					if (InBound(y, x, numRows, numCols)) {
+						cv::Vec3b &c = img.at<cv::Vec3b>(y, x);
+						float w = gExpTable[L1Dist(c, center)];
+						float d = slantedPlane.ToDisparity(y, x);
+						int level = 0.5 + d / GRANULARITY;
+						level = std::max(0, std::min(maxLevel, level));
+
+						anchorCost += w * dsi.get(y, x)[level];
+						accWeight += w;
+					}
+				}
+			}
 		}
-		anchorCost /= anchorInds.size();
+		return anchorCost / accWeight;
 
 
 		return 0.5 * totalCost + 0.5 * anchorCost;

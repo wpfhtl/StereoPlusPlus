@@ -2912,7 +2912,7 @@ void msImageProcessor::DefineBoundaries(void)
 {
 
 	//declare and allocate memory for boundary map and count
-	int	*boundaryMap, *boundaryCount;
+	int	*boundaryMap, *boundaryCount = 0;
 	if ((!(boundaryMap = new int[L])) || (!(boundaryCount = new int[regionCount])))
 		ErrorHandler("msImageProcessor", "DefineBoundaries", "Not enough memory.");
 

@@ -1079,6 +1079,8 @@ static void RandomPrintCostVolume(MCImg<unsigned short> &costVolume, int numPrin
 void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL, cv::Mat &dispR,
 	std::string filePathImageL, std::string filePathImageR, std::string filePathOutImage)
 {
+
+	int timeARAPStart = clock();
 	//int downFactor = 2;
 	//cv::resize(imL, imL, cv::Size(imL.cols / downFactor, imL.rows / downFactor));
 	//cv::resize(imR, imR, cv::Size(imR.cols / downFactor, imR.rows / downFactor));
@@ -1240,6 +1242,73 @@ void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL,
 	ComputeSegmentSimilarityWeights(imL, nbGraphL, segPixelListsL, nbSimWeightsL);
 	ComputeSegmentSimilarityWeights(imR, nbGraphR, segPixelListsR, nbSimWeightsR);
 	
+
+
+	///////////////////////////////////////////////////////////////////////////////////
+#if 0
+	std::vector<cv::Point2f> vertexCoordsL, vertexCoordsR;
+	std::vector<std::vector<int>> triVertexIndsL, triVertexIndsR;
+#define SLIC_TRIANGULATION
+#ifdef SLIC_TRIANGULATION
+	Triangulate2DImage(imL, vertexCoordsL, triVertexIndsL);
+	Triangulate2DImage(imR, vertexCoordsR, triVertexIndsR);
+#else
+	void ImageDomainTessellation(cv::Mat &img, std::vector<cv::Point2f> &vertexCoordList,
+		std::vector<std::vector<int>> &triVertexIndsList);
+	ImageDomainTessellation(imL, vertexCoordsL, triVertexIndsL);
+	ImageDomainTessellation(imR, vertexCoordsR, triVertexIndsR);
+#endif
+
+	cv::Mat triImgL = DrawTriangleImage(numRows, numCols, vertexCoordsL, triVertexIndsL);
+	cv::Mat triImgR = DrawTriangleImage(numRows, numCols, vertexCoordsR, triVertexIndsR);
+	cv::Mat triImgs;
+	cv::hconcat(triImgL, triImgR, triImgs);
+	cv::imshow("triangulation", triImgs);
+	cv::waitKey(0);
+
+	//std::vector<cv::Point2f> baryCentersL, baryCentersR;
+	std::vector<std::vector<int>> nbIndicesL, nbIndicesR;
+	void ConstructNeighboringTriangleGraph(int numRows, int numCols, std::vector<cv::Point2f> &vertexCoords,
+		std::vector<std::vector<int>> &triVertexInds, std::vector<cv::Point2f> &baryCenters,
+		std::vector<std::vector<int>> &nbIndices);
+	ConstructNeighboringTriangleGraph(numRows, numCols, vertexCoordsL, triVertexIndsL, baryCentersL, nbIndicesL);
+	ConstructNeighboringTriangleGraph(numRows, numCols, vertexCoordsR, triVertexIndsR, baryCentersR, nbIndicesR);
+
+	void DeterminePixelOwnership(int numRows, int numCols, std::vector<cv::Point2f> &vertexCoords,
+		std::vector<std::vector<int>> &triVertexInds, std::vector<std::vector<cv::Point2i>> &triPixelLists);
+	std::vector<std::vector<cv::Point2i>> triPixelListsL, triPixelListsR;
+	DeterminePixelOwnership(numRows, numCols, vertexCoordsL, triVertexIndsL, triPixelListsL);
+	DeterminePixelOwnership(numRows, numCols, vertexCoordsR, triVertexIndsR, triPixelListsR);
+
+	segPixelListsL = triPixelListsL;
+	segPixelListsR = triPixelListsR;
+	gSegPixelListsL = segPixelListsL;
+	gSegPixelListsR = segPixelListsR;
+	numSegsL = segPixelListsL.size();
+	numSegsR = segPixelListsR.size();
+	nbGraphL = nbIndicesL;
+	nbGraphR = nbIndicesR;
+	ComputeSegmentSimilarityWeights(imL, nbGraphL, segPixelListsL, nbSimWeightsL);
+	ComputeSegmentSimilarityWeights(imR, nbGraphR, segPixelListsR, nbSimWeightsR);
+
+	for (int i = 0; i < segPixelListsL.size(); i++) {
+		for (int j = 0; j < gSegPixelListsL[i].size(); j++) {
+			int y = gSegPixelListsL[i][j].y;
+			int x = gSegPixelListsL[i][j].x;
+			labelMapL.at<int>(y, x) = i;
+		}
+	}
+	gLabelMapL = labelMapL;
+	for (int i = 0; i < segPixelListsR.size(); i++) {
+		for (int j = 0; j < segPixelListsR[i].size(); j++) {
+			int y = segPixelListsR[i][j].y;
+			int x = segPixelListsR[i][j].x;
+			labelMapR.at<int>(y, x) = i;
+		}
+	}
+	gLabelMapR = labelMapR;
+#endif
+	///////////////////////////////////////////////////////////////////////////////////
 
 	//VisualizeSegmengSimilarityWeights(imL, nbGraphL, segPixelListL);
 
@@ -1413,6 +1482,25 @@ void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL,
 	bs::Timer::Toc();
 	EvaluateDisparity(rootFolder, dispWmfL, 0.5f, &evalParams, "OnMouseTestARAP");
 
+
+	int timeARAPEnd = clock();
+	float timeARAPElapsed = ((float)timeARAPEnd - timeARAPStart) / 1000.f;
+	std::string filePathTimeTxt = filePathOutImage + ".txt";
+	FILE *f = fopen(filePathTimeTxt.c_str(), "w");
+	ASSERT(f != NULL);
+	fprintf(f, "%f", timeARAPElapsed);
+	fclose(f);
+	//for (int i = 0; i < 10; i++) {
+	//	printf("maxDisp = %d\n", maxDisp);
+	//}
+	//cv::Mat tmp;
+	//dispBackgroundFillL.convertTo(tmp, CV_8UC1, 255.f / maxDisp);
+	//cv::imwrite(filePathOutImage + "_dispAAAAAAAAAAAAAA.png", tmp);
+	//cv::imshow("tmp", tmp);
+	//cv::waitKey(0);
+	//dispWmfL.convertTo(tmp, CV_8UC1, 255.f / maxDisp);
+	//cv::imwrite(filePathOutImage + "_dispBBBBBBBBBBBBBB.png", tmp);
+
 	cv::Mat Float2ColorJet(cv::Mat &fimg, float dmin, float dmax);
 	cv::imwrite(filePathOutImage + "_colorjet_dispCrossCheckedL.png", Float2ColorJet(dispCrossCheckedL, 0, numDisps));
 	cv::imwrite(filePathOutImage + "_colorjet_dispCrossCheckedR.png", Float2ColorJet(dispCrossCheckedR, 0, numDisps));
@@ -1426,6 +1514,7 @@ void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL,
 	cv::imwrite(filePathOutImage + "_colorjet_dispPatchMatchOnlyR.png", Float2ColorJet(dispPatchMatchOnlyR, 0, numDisps));
 
 	float upFactor = (rootFolder == "KITTI" ? 256 : 64);
+	if (rootFolder == "Herodion") upFactor = 256;
 	dispDataL.convertTo(dispDataL, CV_16UC1, upFactor);
 	dispDataR.convertTo(dispDataR, CV_16UC1, upFactor);
 	dispSmoothL.convertTo(dispSmoothL, CV_16UC1, upFactor);

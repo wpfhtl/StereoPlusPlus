@@ -188,6 +188,7 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 		printf("*********************************************************\n");
 		printf("WARNING: tensor size too large, using online calculation!");
 		printf("*********************************************************\n");
+		exit(-1);
 		extern cv::Mat gSobelImgL, gSobelImgR, gCensusImgL, gCensusImgR;
 		cv::Mat ComputeCappedSobelImage(cv::Mat &imgIn, int sobelCapValue);
 		gSobelImgL = ComputeCappedSobelImage(imL, 15);
@@ -203,7 +204,16 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 			MCImg<unsigned short> &dsiL, MCImg<unsigned short> &dsiR, int numDisps);*/
 		printf("%s\n%s\n", filePathImageL.c_str(), filePathImageR.c_str());
 		
-		CostVolumeFromYamaguchi<unsigned short>(filePathImageL, filePathImageR, gDsiL, gDsiR, numDisps);
+		MCImg<float> dsiL = ComputeAdGradientCostVolume(imL, imR, numDisps, -1, 1.f);
+		MCImg<float> dsiR = ComputeAdGradientCostVolume(imR, imL, numDisps, +1, 1.f);
+		for (int i = 0; i < numRows * numCols * numDisps; i++) {
+			gDsiL.data[i] = 1024 * dsiL.data[i];
+		}
+		for (int i = 0; i < numRows * numCols * numDisps; i++) {
+			gDsiR.data[i] = 1024 * dsiR.data[i];
+		}
+
+		//CostVolumeFromYamaguchi<unsigned short>(filePathImageL, filePathImageR, gDsiL, gDsiR, numDisps);
 
 		//MCImg<float> ComputeBirchfieldTomasiCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign);
 		//MCImg<float> Compute5x5CensusCostVolume(cv::Mat &imL, cv::Mat &imR, int numDisps, int sign);
@@ -286,6 +296,7 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 	//                                   Output
 	//////////////////////////////////////////////////////////////////////////////
 	float upFactor = (rootFolder == "KITTI" ? 256 : 64);
+	if (rootFolder == "Midd2") upFactor = 256;
 	cv::Mat SetInvalidDisparityToZeros(cv::Mat &dispL, cv::Mat &validPixelMapL);
 	cv::Mat CrossCheck(cv::Mat &dispL, cv::Mat &dispR, int sign, float thresh = 1.f);
 	cv::Mat validPixelL = CrossCheck(dispL, dispR, -1, 1.f);
@@ -294,15 +305,20 @@ void RunPatchMatchOnPixels(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, c
 	cv::Mat dispCrossCheckedR = SetInvalidDisparityToZeros(dispR, validPixelR);
 
 
-	slantedPlanesL.SaveToBinaryFile("d:/pixelwiseSlantedPlanesL.bin");
-	ASSERT(bestCostsL.isContinuous());
-	MCImg<float> mcimgBestCostL(numRows, numCols, 1, (float*)bestCostsL.data);
-	mcimgBestCostL.SaveToBinaryFile("d:/pixelwiseBestCostsL.bin");
+	//slantedPlanesL.SaveToBinaryFile("d:/pixelwiseSlantedPlanesL.bin");
+	//ASSERT(bestCostsL.isContinuous());
+	//MCImg<float> mcimgBestCostL(numRows, numCols, 1, (float*)bestCostsL.data);
+	//mcimgBestCostL.SaveToBinaryFile("d:/pixelwiseBestCostsL.bin");
 
 	// Step 3 - Cross check and post-process
 	cv::Mat dispWmfL = dispL.clone();
 	cv::Mat dispWmfR = dispR.clone();
 	PatchMatchOnPixelPostProcess(slantedPlanesL, slantedPlanesR, imL, imR, dispWmfL, dispWmfR);
+
+	cv::Mat dispVisualize;
+	dispWmfL.convertTo(dispVisualize, CV_8UC1, 255.f / maxDisp);
+	cv::imwrite(filePathImageOut + "_dispVisualize.png", dispVisualize);
+
 
 	cv::Mat Float2ColorJet(cv::Mat &fimg, float dmin, float dmax);
 	cv::imwrite(filePathImageOut + "_colorjet_dispL.png", Float2ColorJet(dispL, 0, numDisps));

@@ -156,18 +156,21 @@ void SaveMeshStereoResultToPly(cv::Mat &img, float maxDisp,
 	shareDispVal.setTo(0.f);
 	shareDispCnt.setTo(0);
 
+	printf("222222222222222\n");
 	int numTriangles = triVertexInds.size();
 	for (int id = 0; id < numTriangles; id++) {
 		for (int j = 0; j < 3; j++) {
 			int y = vertexCoords[triVertexInds[id][j]].y;
 			int x = vertexCoords[triVertexInds[id][j]].x;
+			ASSERT(0 <= y && y <= numRows);
+			ASSERT(0 <= x && x <= numCols);
 			if (!splitMap.at<bool>(y, x)) {
 				shareDispVal.at<float>(y, x) += triVertexBestLabels[id][j].ToDisparity(y - 0.5f, x - 0.5f);
 				shareDispCnt.at<int>(y, x) += 1;
 			}
 		}
 	}
-
+	printf("222222222222222\n");
 	// Build the 3D vertex list
 
 	cv::Mat elemVertexInds(numRows + 1, numCols + 1, CV_32SC1);
@@ -175,7 +178,7 @@ void SaveMeshStereoResultToPly(cv::Mat &img, float maxDisp,
 	std::vector<cv::Point3d> elemXYZ;
 	elemXYZ.reserve(3 * numTriangles);
 
-
+	printf("222222222222222\n");
 	for (int y = 0; y < numRows + 1; y++) {
 		for (int x = 0; x < numCols + 1; x++) {
 			if (shareDispCnt.at<int>(y, x) > 0) {
@@ -187,7 +190,7 @@ void SaveMeshStereoResultToPly(cv::Mat &img, float maxDisp,
 			}
 		}
 	}
-
+	printf("222222222222222\n");
 	std::vector<std::vector<int>> facetElemVertexInds = triVertexInds;
 	for (int id = 0; id < numTriangles; id++) {
 		for (int j = 0; j < 3; j++) {
@@ -206,12 +209,14 @@ void SaveMeshStereoResultToPly(cv::Mat &img, float maxDisp,
 		}
 	}
 
-
+	printf("222222222222222\n");
 	int numElementVertices = elemXYZ.size();
 	int numElementFacets = triVertexInds.size();
 
 	// Step 1 - print the header
+	printf("%s\n", plyFilePath.c_str());
 	fid = fopen(plyFilePath.c_str(), "w");
+	ASSERT(fid != NULL);
 	fprintf(fid,
 		"ply\n"
 		"format ascii 1.0\n"
@@ -230,11 +235,13 @@ void SaveMeshStereoResultToPly(cv::Mat &img, float maxDisp,
 		);
 
 
+	printf("222222222222222\n");
 	// Step 2 - print vertices coordinates in 3D
 	for (int i = 0; i < numElementVertices; i++) {
 		fprintf(fid, "%f %f %f\n", elemXYZ[i].x, elemXYZ[i].y, elemXYZ[i].z);
 	}
 
+	printf("222222222222222\n");
 	// Step 3 - print each triangle's vertex index and texture coordinates
 	cv::Point2f offset = cv::Point2f(0.5, 0.5);
 	for (int id = 0; id < numTriangles; id++) {
@@ -347,3 +354,98 @@ void SaveMeshStereoResultToPly(cv::Mat &img, float maxDisp,
 	fclose(fid);
 }
 #endif
+
+void SaveMeshToPly(std::string plyFilePath, int numRows, int numCols, float focalLen, float baselineLen,
+	std::vector<cv::Point3f> &meshVertexCoordsXyd, std::vector<std::vector<int>> &facetVetexIndsList, 
+	std::string textureFilePath, bool showInstantly = false)
+{
+	int dmin = 270;
+	extern std::string ROOTFOLDER;
+	std::string filePathDmin = "D:/data/Midd2/ThirdSize/" + ROOTFOLDER + "/dmin.txt";
+	FILE* f = fopen(filePathDmin.c_str(), "r");
+	if (f != NULL) {
+		fscanf(f, "%d", &dmin);
+		fclose(f);
+	}
+	
+	
+	printf("meshVertexCoordsXyd.size() = %d\n", meshVertexCoordsXyd.size());
+
+	std::vector<cv::Point3f> meshVertexCoordsXYZ(meshVertexCoordsXyd.size());
+	for (int i = 0; i < meshVertexCoordsXyd.size(); i++) {
+		float d = meshVertexCoordsXyd[i].z;
+		d = std::max(0.f, std::min(79.f, d));
+		d += dmin; 
+		float Z = focalLen * baselineLen / d;
+		float X = meshVertexCoordsXyd[i].x * Z / focalLen;
+		float Y = meshVertexCoordsXyd[i].y * Z / focalLen;
+		meshVertexCoordsXYZ[i] = cv::Point3f(X, Y, Z);
+	}
+
+	int numElementVertices = meshVertexCoordsXYZ.size();
+	int numElementFacets = facetVetexIndsList.size();
+
+	// Step 1 - print the header
+	printf("saving ply file %s .......\n", plyFilePath.c_str());
+	FILE *fid = fopen(plyFilePath.c_str(), "w");
+	ASSERT(fid != NULL);
+	fprintf(fid,
+		"ply\n"
+		"format ascii 1.0\n"
+		"comment TextureFile %s\n"
+		"element vertex %d\n"
+		"property float x\n"
+		"property float y\n"
+		"property float z\n"
+		"property uchar red\n"
+		"property uchar green\n"
+		"property uchar blue\n"
+		"element face %d\n"
+		"property list uchar int vertex_indices\n"
+		"property list uchar float texcoord\n"
+		"end_header\n",
+		textureFilePath.c_str(),
+		numElementVertices,
+		numElementFacets
+		);
+
+	cv::Mat textureImg = cv::imread(textureFilePath);
+	printf("textureFilePath = %s\n", textureFilePath.c_str());
+	ASSERT(!textureImg.empty());
+	// Step 2 - print vertices coordinates in 3D
+	for (int i = 0; i < numElementVertices; i++) {
+		int y = meshVertexCoordsXyd[i].y;
+		int x = meshVertexCoordsXyd[i].x;
+		y = std::max(0, std::min(numRows - 1, y));
+		x = std::max(0, std::min(numRows - 1, x));
+		cv::Vec3b color = textureImg.at<cv::Vec3b>(y, x);
+		fprintf(fid, "%f %f %f %d %d %d\n", 
+			meshVertexCoordsXYZ[i].x, meshVertexCoordsXYZ[i].y, meshVertexCoordsXYZ[i].z,
+			color[2], color[1], color[0]);
+	}
+
+	// Step 3 - print each triangle's vertex index and texture coordinates
+	for (int id = 0; id < facetVetexIndsList.size(); id++) {
+		cv::Point3f p0 = meshVertexCoordsXyd[facetVetexIndsList[id][0]];
+		cv::Point3f p1 = meshVertexCoordsXyd[facetVetexIndsList[id][1]];
+		cv::Point3f p2 = meshVertexCoordsXyd[facetVetexIndsList[id][2]];
+
+		p0.x /= numCols;	p0.y = 1.0 - p0.y / numRows;
+		p1.x /= numCols;	p1.y = 1.0 - p1.y / numRows;
+		p2.x /= numCols;	p2.y = 1.0 - p2.y / numRows;
+
+		int i0 = facetVetexIndsList[id][0];
+		int i1 = facetVetexIndsList[id][1];
+		int i2 = facetVetexIndsList[id][2];
+
+		fprintf(fid, "3 %d %d %d 6 %f %f %f %f %f %f\n",
+			i2, i1, i0, p2.x, p2.y, p1.x, p1.y, p0.x, p0.y);
+	}
+
+	fclose(fid);
+
+	if (showInstantly) {
+		std::string cmd = "meshlab " + plyFilePath;
+		system(cmd.c_str());
+	}
+}

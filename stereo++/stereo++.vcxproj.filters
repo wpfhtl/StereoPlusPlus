@@ -291,6 +291,21 @@
     <ClCompile Include="BoostResults.cpp">
       <Filter>LocalMethods</Filter>
     </ClCompile>
+    <ClCompile Include="Snowman.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="GLExample.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="Serialize.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="GL_Bowling.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="GL_Bowling2.cpp">
+      <Filter>LocalMethods</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="MeanShift\MSReadme.txt">

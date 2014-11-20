@@ -8,10 +8,11 @@
 
 void SetupStereoParameters(std::string rootFolder, int &numDisps, int &maxDisp, int &visualizeScale)
 {
+	extern int gNumDisps;
 	if (rootFolder == "Midd3") {
 		numDisps = 280;
 		visualizeScale = 1;
-		extern int gNumDisps;
+		
 		if (gNumDisps > 0) {
 			numDisps = gNumDisps;
 		}
@@ -43,6 +44,13 @@ void SetupStereoParameters(std::string rootFolder, int &numDisps, int &maxDisp, 
 		numDisps = 70;
 		visualizeScale = 3;
 	}
+
+
+	if (gNumDisps > 0) {
+		numDisps = gNumDisps;
+	}
+
+
 	if (numDisps % 16 != 0) {
 		numDisps += (16 - numDisps % 16);
 	}

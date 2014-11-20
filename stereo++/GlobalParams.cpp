@@ -49,6 +49,7 @@ cv::Mat gDispSGML, gDispSGMR;
 std::string midd3Resolution, midd3TestCaseId;
 std::string midd3BasePath = "D:\\data\\MiddEval3";
 std::string kittiTestCaseId;
+std::string kittiBasePath = "D:\\data\\KITTI";
 std::vector<std::vector<cv::Point2i>> gSegPixelListsL, gSegPixelListsR;
 std::vector<std::vector<int>> segAnchorIndsL, segAnchorIndsR;
 int VISUALIZE_EVAL, DO_EVAL;
@@ -284,6 +285,10 @@ void ReadStereoParameters(std::string filePathStereoParams = "")
 		else if (std::string(keyStr) == "midd3BasePath") {
 			midd3BasePath = std::string(valStr);
 			printf("%20s = %s\n", "midd3BasePath", midd3BasePath.c_str());
+		}
+		else if (std::string(keyStr) == "kittiBasePath") {
+			kittiBasePath = std::string(valStr);
+			printf("%20s = %s\n", "kittiBasePath", kittiBasePath.c_str());
 		}
 	}
 	

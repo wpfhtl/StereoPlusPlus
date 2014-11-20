@@ -35,24 +35,30 @@
 
 
 #if 0
+// wmf
 int main(int argc, char **argv)
 {
 	if (argc != 6) {
-		printf("usage: %s filePathImgL filePathDispL filePathDispR filePathDispOut useValidPixelOnly", argv[0]);
+		printf("usage: %s filePathImgL filePathDispL filePathDispR filePathDispOut useValidPixelOnly [visualizeScale=64]", argv[0]);
 		exit(-1);
 	}
+
 
 	std::string filePathImgL	= std::string(argv[1]);
 	std::string filePathDispL	= std::string(argv[2]);
 	std::string filePathDispR	= std::string(argv[3]);
 	std::string filePathDispOut = std::string(argv[4]);
 	int useValidPixelOnly		= atoi(argv[5]);
+	float visualizeScale = 64;
+	if (argc == 7) {
+		visualizeScale = atof(argv[6]);
+	}
 
 	cv::Mat img		= cv::imread(filePathImgL);
 	cv::Mat dispL	= cv::imread(filePathDispL, CV_LOAD_IMAGE_UNCHANGED);
 	cv::Mat dispR	= cv::imread(filePathDispR, CV_LOAD_IMAGE_UNCHANGED);
-	dispL.convertTo(dispL, CV_32FC1, 1.f / 64.f);
-	dispR.convertTo(dispR, CV_32FC1, 1.f / 64.f);
+	dispL.convertTo(dispL, CV_32FC1, 1.f / visualizeScale);
+	dispR.convertTo(dispR, CV_32FC1, 1.f / visualizeScale);
 	cv::Mat validPixelMapL = CrossCheck(dispL, dispR, -1, 1.f);
 	cv::Mat validPixelMapR = CrossCheck(dispR, dispL, +1, 1.f);
 
@@ -60,6 +66,7 @@ int main(int argc, char **argv)
 	PixelwiseOcclusionFilling(dispL, validPixelMapL);
 	PixelwiseOcclusionFilling(dispR, validPixelMapR);
 
+	
 	validPixelMapL = CrossCheck(dispL, dispR, -1, 1.f);
 	validPixelMapR = CrossCheck(dispR, dispL, +1, 1.f);
 
@@ -71,11 +78,17 @@ int main(int argc, char **argv)
 	FastWeightedMedianFilterInvalidPixels(dispWmfL, validPixelMapL, img, useValidPixelOnly);
 	bs::Timer::Toc();
 
-	dispWmfL.convertTo(dispWmfL, CV_16UC1, 64);
-	cv::imwrite(filePathDispOut, dispWmfL);
+	double minVal, maxVal;
+	cv::minMaxIdx(dispL, &minVal, &maxVal);
+	cv::Mat Float2ColorJet(cv::Mat &fimg, float dmin, float dmax);
+	cv::imwrite(filePathDispOut + "_colorjet_wmfL.png", Float2ColorJet(dispL, minVal, maxVal));
+
+	dispWmfL.convertTo(dispWmfL, CV_16UC1, visualizeScale);
+	cv::imwrite(filePathDispOut + "_wmfL.png", dispWmfL);
 }
 #endif
 #if 0
+// disparity .png or .pfm to colorjet mpa.
 int main(int argc, char **argv)
 {
 	if (argc < 5) {
@@ -367,5 +380,101 @@ int main(int argc, char **argv)
 
 
 	return 0;
+}
+#endif
+#if 0
+// calculate the matching cost rescaling factor if i change the census weight from 0.2 to 2.
+template<typename T>
+void CostVolumeFromYamaguchi(std::string &leftFilePath, std::string &rightFilePath,
+	MCImg<T> &dsiL, MCImg<T> &dsiR, int numDisps);
+
+
+cv::Vec3d CostStatistics(MCImg<unsigned short> &dsi, cv::Mat &disp)
+{
+	int numRows = dsi.h, numCols = dsi.w, numDisps = dsi.n;
+	std::vector<unsigned short> vals;
+	vals.reserve(numRows * numCols);
+
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			int d = disp.at<float>(y, x);
+			if (d < 0 || d >= numDisps) {
+				d = rand() % numDisps;
+			}
+			vals.push_back(dsi.get(y, x)[d]);
+		}
+	}
+
+	double sum = 0;
+	for (int i = 0; i < vals.size(); i++) {
+		sum += vals[i];
+	}
+	double mean = sum / vals.size();
+	
+	double deviation = 0;
+	for (int i = 0; i < vals.size(); i++) {
+		deviation += (vals[i] - mean) * (vals[i] - mean);
+	}
+	deviation /= vals.size();
+	double stdev = std::sqrt(deviation);
+
+	std::sort(vals.begin(), vals.end());
+	double median = vals[vals.size() / 2];
+
+	return cv::Vec3d(mean, median, stdev);
+}
+
+int main(int argc, char **argv)
+{
+	std::string filePathGT = "D:/data/MiddEval3/trainingH/Piano/disp0GT.pfm";;
+	std::string filePathImL = "D:/data/MiddEval3/trainingH/Piano/im0.png";
+	std::string filePathImR = "D:/data/MiddEval3/trainingH/Piano/im1.png";;
+
+	cv::Mat imL = cv::imread(filePathImL);
+	cv::Mat imR = cv::imread(filePathImR);
+	int numRows = imL.rows, numCols = imL.cols, numDisps = 144;
+
+	cv::Mat ReadFilePFM(std::string filePath);
+	cv::Mat dispGT = ReadFilePFM(filePathGT);
+	
+	extern double SGMSTEREO_DEFAULT_CENSUS_WEIGHT_FACTOR;
+	MCImg<unsigned short> dsiL(numRows, numCols, numDisps);
+	MCImg<unsigned short> dsiR(numRows, numCols, numDisps);
+
+	SGMSTEREO_DEFAULT_CENSUS_WEIGHT_FACTOR = 0.2;
+	CostVolumeFromYamaguchi<unsigned short>(filePathImL, filePathImR, dsiL, dsiR, numDisps);
+	cv::Vec3d stat1 = CostStatistics(dsiL, dispGT);
+
+	SGMSTEREO_DEFAULT_CENSUS_WEIGHT_FACTOR = 2;
+	CostVolumeFromYamaguchi<unsigned short>(filePathImL, filePathImR, dsiL, dsiR, numDisps);
+	cv::Vec3d stat2 = CostStatistics(dsiL, dispGT);
+
+	printf("*************** for dispGT *****************\n");
+	printf("old0.2: avg = %lf,   median = %lf,  standard_deviation = %lf\n", stat1[0], stat1[1], stat1[2]);
+	printf("new2.0: avg = %lf,   median = %lf,  standard_deviation = %lf\n", stat2[0], stat2[1], stat2[2]);
+
+
+
+
+	cv::Mat dispRandom(numRows, numCols, CV_32FC1);
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			dispRandom.at<float>(y, x) = rand() % numDisps;
+		}
+	}
+	SGMSTEREO_DEFAULT_CENSUS_WEIGHT_FACTOR = 0.2;
+	CostVolumeFromYamaguchi<unsigned short>(filePathImL, filePathImR, dsiL, dsiR, numDisps);
+	stat1 = CostStatistics(dsiL, dispRandom);
+
+	SGMSTEREO_DEFAULT_CENSUS_WEIGHT_FACTOR = 2;
+	CostVolumeFromYamaguchi<unsigned short>(filePathImL, filePathImR, dsiL, dsiR, numDisps);
+	stat2 = CostStatistics(dsiL, dispRandom);
+
+	printf("*************** for disp Noise *****************\n");
+	printf("old0.2: avg = %lf,   median = %lf,  standard_deviation = %lf\n", stat1[0], stat1[1], stat1[2]);
+	printf("new2.0: avg = %lf,   median = %lf,  standard_deviation = %lf\n", stat2[0], stat2[1], stat2[2]);
+
+	return 0;
+
 }
 #endif

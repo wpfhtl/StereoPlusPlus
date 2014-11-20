@@ -6,9 +6,19 @@
 #include <set>
 #include <string>
 #include <ctime>
+#include <iostream>
 
 #include "SLIC/SLIC.h"
 #include "poly2tri/poly2tri.h"
+#include "StereoAPI.h"
+#include "Fade_2D.h"
+
+
+#ifdef _DEBUG
+#pragma comment(lib, "fade2D_vc12_Debug.lib")
+#else
+#pragma comment(lib, "fade2D_vc12_Release.lib")
+#endif
 
 
 static void traceBoundary(
@@ -671,8 +681,27 @@ int SLICSegmentation(const cv::Mat &img, const int numPreferedRegions, const int
 cv::Mat DrawTriangleImage(int numRows, int numCols, std::vector<cv::Point2f> &vertexCoords, std::vector<std::vector<int>> &triVertexInds)
 {
 	const cv::Point2f halfOffset(0.5, 0.5);
-	cv::Mat triImg(numRows, numCols, CV_8UC3);
+	cv::Mat triImg = cv::Mat::zeros(numRows, numCols, CV_8UC3);
+
 	triImg.setTo(cv::Vec3b(0, 0, 0));
+
+	for (int i = 0; i < triVertexInds.size(); i++) {
+		cv::Point2f p0 = vertexCoords[triVertexInds[i][0]];
+		cv::Point2f p1 = vertexCoords[triVertexInds[i][1]];
+		cv::Point2f p2 = vertexCoords[triVertexInds[i][2]];
+
+		cv::line(triImg, p0 - halfOffset, p1 - halfOffset, cv::Scalar(0, 0, 255, 255), 1, CV_AA);
+		cv::line(triImg, p0 - halfOffset, p2 - halfOffset, cv::Scalar(0, 0, 255, 255), 1, CV_AA);
+		cv::line(triImg, p1 - halfOffset, p2 - halfOffset, cv::Scalar(0, 0, 255, 255), 1, CV_AA);
+	}
+
+	return triImg;
+}
+
+cv::Mat DrawTriangleImage(int numRows, int numCols, std::vector<cv::Point2f> &vertexCoords, std::vector<std::vector<int>> &triVertexInds, cv::Mat &textureImg)
+{
+	const cv::Point2f halfOffset(0.5, 0.5);
+	cv::Mat triImg = textureImg.clone();
 
 	for (int i = 0; i < triVertexInds.size(); i++) {
 		cv::Point2f p0 = vertexCoords[triVertexInds[i][0]];
@@ -690,10 +719,11 @@ cv::Mat DrawTriangleImage(int numRows, int numCols, std::vector<cv::Point2f> &ve
 void Triangulate2DImage(cv::Mat& img, std::vector<cv::Point2f> &vertexCoords, std::vector<std::vector<int>> &triVertexInds)
 {
 	int numRows = img.rows, numCols = img.cols;
-	const int segLen = 8;
+	const int segLen = 10;
 	const int numPreferedRegions = (numRows * numCols) / (segLen * segLen);
-	const int compactness = 30;
+	const int compactness = 25;
 	const int mergeRadius = segLen * 0.375;
+	//const int mergeRadius = 3;
 
 	cv::Mat labelMap, contourImg;
 	int numSeg = SLICSegmentation(img, numPreferedRegions, compactness, labelMap, contourImg);
@@ -726,4 +756,326 @@ void TestTriangulation2D()
 	cv::hconcat(canvas, contourImg, canvas);
 	cv::imshow("canvas", canvas);
 	cv::waitKey(0);
+}
+
+std::string type2str(int type) {
+	std::string r;
+
+	uchar depth = type & CV_MAT_DEPTH_MASK;
+	uchar chans = 1 + (type >> CV_CN_SHIFT);
+
+	switch (depth) {
+	case CV_8U:  r = "8U"; break;
+	case CV_8S:  r = "8S"; break;
+	case CV_16U: r = "16U"; break;
+	case CV_16S: r = "16S"; break;
+	case CV_32S: r = "32S"; break;
+	case CV_32F: r = "32F"; break;
+	case CV_64F: r = "64F"; break;
+	default:     r = "User"; break;
+	}
+
+	r += "C";
+	r += (chans + '0');
+
+	return r;
+}
+
+
+static void UpdateClosestAnchorInfo(cv::Mat &closestAnchorDist, cv::Mat &closestAnchorLocation, 
+	int yc, int xc, int scanType = 0)
+{
+	const std::vector<cv::Point2f> offsetsL = { 
+		cv::Point2f(-1, -1), cv::Point2f(0, -1), cv::Point2f(+1, -1), 
+		cv::Point2f(-1, 0) };
+	const std::vector<cv::Point2f> offsetsR = {
+		cv::Point2f(-1, -1), cv::Point2f(0, -1), cv::Point2f(+1, -1),
+		cv::Point2f(+1, 0) };
+
+	const std::vector<cv::Point2f> &offsets = (scanType == 0 ? offsetsL : offsetsR);
+
+
+	int numRows = closestAnchorDist.rows, numCols = closestAnchorDist.cols;
+	float bestDist = FLT_MAX;
+	cv::Point2f bestAnchor = cv::Point2f(xc, yc);
+
+	for (int i = 0; i < offsets.size(); i++) {
+		int y = yc + offsets[i].y;
+		int x = xc + offsets[i].x;
+		if (InBound(y, x, numRows, numCols)) {
+			cv::Point2f candidateAnchor = closestAnchorLocation.at<cv::Vec2f>(y, x);
+			float dist = (candidateAnchor.x - xc) * (candidateAnchor.x - xc)
+				+ (candidateAnchor.y - yc) * (candidateAnchor.y - yc);
+			if (dist < bestDist) {
+				bestDist = dist;
+				bestAnchor = candidateAnchor;
+			}
+		}
+	}
+
+	closestAnchorDist.at<float>(yc, xc) = bestDist;
+	closestAnchorLocation.at<cv::Vec2f>(yc, xc) = bestAnchor;
+}
+
+static float DistanceToClosestAnchors(cv::Point2f &p, std::vector<cv::Point2f> &vertexCoordList)
+{
+	float minDist = FLT_MAX;
+	for (int i = 0; i < vertexCoordList.size(); i++) {
+		cv::Point2f &q = vertexCoordList[i];
+		float dist = (p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y);
+		minDist = std::min(dist, minDist);
+	}
+	return minDist;
+}
+
+static cv::Point2f SubpixelGradientShift(cv::Mat &blurredGrayImg, int xc, int yc)
+{
+	//if (yc == 9 && xc == 232) {
+	//	printf("here.\n");
+	//	printf("%s\n", type2str(blurredGrayImg.type()).c_str());
+	//}
+	int bestY = yc, bestX = xc;		// that is, upper-left corner of the pixel (xc, yc)
+	float bestDist = -1;
+	for (int dy = -1; dy <= +1; dy += 2) {
+		for (int dx = -1; dx <= +1; dx += 2) {
+			int y = yc + dy;
+			int x = xc + dx;
+			if (InBound(y, x, blurredGrayImg.rows, blurredGrayImg.cols)) {
+				float dist = std::abs(blurredGrayImg.at<unsigned char>(y, x) - blurredGrayImg.at<unsigned char>(yc, xc));
+				if (dist > bestDist) {
+					bestDist = dist;
+					bestX = xc + (dx + 1) / 2;	// -1->0, +1->1
+					bestY = yc + (dy + 1) / 2;	// -1->0, +1->1
+				}
+			}
+		}
+	}
+	return cv::Point2f(bestX, bestY);
+}
+
+void ImageDomainTessellation(cv::Mat &img, std::vector<cv::Point2f> &vertexCoordList,
+	std::vector<std::vector<int>> &triVertexIndsList)
+{
+	const float Pmin	= 9;
+	const float delta	= 10;
+	int numRows = img.rows, numCols = img.cols;
+	
+
+	// Step 1 - detect canny edges on three channels seperately and union them
+	//        - spread the initial anchors along edges with min distance P_min
+	std::vector<cv::Mat> channels;
+	cv::split(img, channels);
+
+	cv::Mat edgeMaps[3];
+	for (int i = 0; i < 3; i++) {
+		cv::blur(channels[i], channels[i], cv::Size(3, 3));
+		cv::Canny(channels[i], edgeMaps[i], 100, 200);
+		std::cout << type2str(edgeMaps[i].type()) << "\n";
+	}
+
+	//for (int i = 0; i < 3; i++) {
+	//	cv::imshow("edges", edgeMaps[i]);
+	//	cv::waitKey(0);
+	//}
+	
+	cv::bitwise_or(edgeMaps[0], edgeMaps[1], edgeMaps[1]);
+	cv::bitwise_or(edgeMaps[1], edgeMaps[2], edgeMaps[2]);
+	cv::Mat finalEdgeMap = edgeMaps[2].clone();
+	//cv::imshow("final edge", edgeMaps[2]);
+	//cv::waitKey(0);
+	
+	 
+
+	vertexCoordList.clear();
+	vertexCoordList.push_back(cv::Point2f(0, 0));
+	vertexCoordList.push_back(cv::Point2f(0, numRows));
+	vertexCoordList.push_back(cv::Point2f(numCols, 0));
+	vertexCoordList.push_back(cv::Point2f(numCols, numRows));
+
+
+	// add anchors along image borders
+	for (int x = 0; x < numCols; x++) {
+		float dist = DistanceToClosestAnchors(cv::Point2f(x, 0), vertexCoordList);
+		if (dist > Pmin * Pmin) {
+			vertexCoordList.push_back(cv::Point2f(x, 0));
+		}
+		dist = DistanceToClosestAnchors(cv::Point2f(x, numRows), vertexCoordList);
+		if (dist > Pmin * Pmin) {
+			vertexCoordList.push_back(cv::Point2f(x, numRows));
+		}
+	}
+	for (int y = 0; y < numRows; y++) {
+		float dist = DistanceToClosestAnchors(cv::Point2f(0, y), vertexCoordList);
+		if (dist > Pmin * Pmin) {
+			vertexCoordList.push_back(cv::Point2f(0, y));
+		}
+		dist = DistanceToClosestAnchors(cv::Point2f(numCols, y), vertexCoordList);
+		if (dist > Pmin * Pmin) {
+			vertexCoordList.push_back(cv::Point2f(numCols, y));
+		}
+	}
+
+	
+	cv::Mat blurredGrayImg;
+	cv::cvtColor(img, blurredGrayImg, CV_BGR2GRAY);
+	
+	cv::GaussianBlur(blurredGrayImg, blurredGrayImg, cv::Size(0, 0), 1);
+	
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			if (finalEdgeMap.at<unsigned char>(y, x) == 255) {
+				//printf("22222222222\n");
+				float dist = DistanceToClosestAnchors(cv::Point2f(x, y), vertexCoordList);
+				if (dist > Pmin * Pmin) {
+					// shift the vertex from pixel center to pixel corner according to local gradient.
+					//cv::Point2f p(x, y);
+					//printf("(y, x) = (%d, %d)\n", y, x);
+					cv::Point2f p = SubpixelGradientShift(blurredGrayImg, x, y);
+					//printf("22222222222\n");
+					vertexCoordList.push_back(p);
+				}
+			}
+		}
+	}
+	
+	
+
+	// Draw anchor image.
+	//cv::Mat anchorImg = img.clone();
+	//for (int i = 0; i < vertexCoordList.size(); i++) {
+	//	cv::Point2f p = vertexCoordList[i];
+	//	cv::circle(anchorImg, p, 5, cv::Scalar(0, 0, 255, 0), 1, CV_AA);
+	//}
+	//cv::imshow("anchorImg", anchorImg);
+	//cv::waitKey(0);
+
+
+	
+	// Step 2 - Compute scale map, scan the image to add additional anchors
+	double sigmas[6];
+	for (int j = 0; j <= 5; j++) {
+		sigmas[j] = std::pow(1.9, j);
+	}
+
+	cv::Mat blurredImgs[6];
+	for (int j = 0; j <= 5; j++) {
+		cv::GaussianBlur(img, blurredImgs[j], cv::Size(0, 0), sigmas[j], sigmas[j]);
+	}
+
+	cv::Mat scaleMap(numRows, numCols, CV_32FC1);
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			int k = 1;
+			for (int j = 1; j <= 5; j++) {
+				float L2Dist(const cv::Vec3b &a, const cv::Vec3b &b);
+				float diff = L2Dist(blurredImgs[1].at<cv::Vec3b>(y, x), blurredImgs[j].at<cv::Vec3b>(y, x));
+				if (diff < delta) {
+					k = j;
+				}
+				/*else {
+					break;
+				}*/
+			}
+			scaleMap.at<float>(y, x) = k;
+		}
+	}
+	cv::GaussianBlur(scaleMap, scaleMap, cv::Size(0, 0), 2.0);
+	//for (int y = 0; y < numRows; y++) {
+	//	for (int x = 0; x < numCols; x++) {
+	//		scaleMap.at<float>(y, x) = (int)(scaleMap.at<float>(y, x) + 0.5);
+	//	}
+	//}
+
+	
+	// visualize scale map
+	cv::Mat scaleMapImg;
+	scaleMap.convertTo(scaleMapImg, CV_8UC1, 25.f);
+	//cv::imshow("scaleMap", scaleMapImg);
+	//cv::waitKey(0);
+
+
+	// add additional anchors
+	for (int y = 0; y < numRows; y++) {
+		for (int x = 0; x < numCols; x++) {
+			float dist = DistanceToClosestAnchors(cv::Point2f(x, y), vertexCoordList);
+			float thresh = std::pow(1.5, scaleMap.at<float>(y, x) + 6.0);
+			if (dist > thresh * thresh) {
+				vertexCoordList.push_back(cv::Point2f(x, y));
+			}
+		}
+	}
+
+	cv::Mat anchorImg = img.clone();
+	for (int i = 0; i < vertexCoordList.size(); i++) {
+		cv::Point2f p = vertexCoordList[i];
+		cv::circle(anchorImg, p, 1, cv::Scalar(0, 0, 255, 0), 1, CV_AA);
+	}
+	//cv::imshow("anchorImg", anchorImg);
+	//cv::waitKey(0);
+
+	
+	// Step 3 - Delaunay triangulate the anchors and return;
+	std::vector<GEOM_FADE2D::Point2> fade2dVertexList(vertexCoordList.size());
+	for (int i = 0; i < vertexCoordList.size(); i++) {
+		fade2dVertexList[i] = GEOM_FADE2D::Point2(vertexCoordList[i].x, vertexCoordList[i].y);
+		fade2dVertexList[i].setCustomIndex(i);
+	}
+
+	GEOM_FADE2D::Fade_2D triangulizer;
+	std::vector<GEOM_FADE2D::Point2*> vHandles;
+	triangulizer.insert(fade2dVertexList, vHandles);
+
+	std::vector<GEOM_FADE2D::Triangle2*> trianglePtrs;
+	triangulizer.getTrianglePointers(trianglePtrs);
+	printf("trianglePtrs.size() = %d\n", trianglePtrs.size());
+
+
+	// populate triVertexIndsList
+	triVertexIndsList.resize(trianglePtrs.size());
+	for (int i = 0; i < trianglePtrs.size(); i++) {
+		triVertexIndsList[i].push_back(trianglePtrs[i]->getCorner(0)->getCustomIndex());
+		triVertexIndsList[i].push_back(trianglePtrs[i]->getCorner(1)->getCustomIndex());
+		triVertexIndsList[i].push_back(trianglePtrs[i]->getCorner(2)->getCustomIndex());
+	}
+
+
+	//cv::Mat triangleImg = img.clone();
+	//for (int i = 0; i < trianglePtrs.size(); i++) {
+	//	GEOM_FADE2D::Point2 *A = trianglePtrs[i]->getCorner(0);
+	//	GEOM_FADE2D::Point2 *B = trianglePtrs[i]->getCorner(1);
+	//	GEOM_FADE2D::Point2 *C = trianglePtrs[i]->getCorner(2);
+	//	//printf("A = (%.2lf, %.2lf)\n", A->x(), A->y());
+	//	//printf("B = (%.2lf, %.2lf)\n", B->x(), B->y());
+	//	//printf("C = (%.2lf, %.2lf)\n\n", C->x(), C->y());
+	//	cv::Point2f a = cv::Point2f(A->x(), A->y());
+	//	cv::Point2f b = cv::Point2f(B->x(), B->y());
+	//	cv::Point2f c = cv::Point2f(C->x(), C->y());
+	//	cv::line(triangleImg, a, b, cv::Scalar(0, 0, 255), 1, CV_AA);
+	//	cv::line(triangleImg, a, c, cv::Scalar(0, 0, 255), 1, CV_AA);
+	//	cv::line(triangleImg, b, c, cv::Scalar(0, 0, 255), 1, CV_AA);
+
+	//	printf("A->getCustomIndex() = %d\n", A->getCustomIndex());
+	//}
+	cv::Mat triangleImg = img.clone();
+	for (int i = 0; i < trianglePtrs.size(); i++) {
+		
+		const cv::Point2f halfOffset(0.5, 0.5);
+		cv::Point2f a = halfOffset + vertexCoordList[triVertexIndsList[i][0]];
+		cv::Point2f b = halfOffset + vertexCoordList[triVertexIndsList[i][1]];
+		cv::Point2f c = halfOffset + vertexCoordList[triVertexIndsList[i][2]];
+	
+		cv::line(triangleImg, a, b, cv::Scalar(0, 0, 255), 1, CV_AA);
+		cv::line(triangleImg, a, c, cv::Scalar(0, 0, 255), 1, CV_AA);
+		cv::line(triangleImg, b, c, cv::Scalar(0, 0, 255), 1, CV_AA);
+	}
+
+
+
+
+	//cv::imshow("triangleImg", triangleImg);
+	//cv::waitKey(0);
+
+	printf("happy!\n");
+	
+
 }

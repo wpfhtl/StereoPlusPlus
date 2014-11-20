@@ -37,7 +37,7 @@ int SGMSTEREO_DEFAULT_DISPARITY_TOTAL = 256;
 double SGMSTEREO_DEFAULT_DISPARITY_FACTOR = 256;
 const int SGMSTEREO_DEFAULT_SOBEL_CAP_VALUE = 15;
 const int SGMSTEREO_DEFAULT_CENSUS_WINDOW_RADIUS = 2;
-const double SGMSTEREO_DEFAULT_CENSUS_WEIGHT_FACTOR = 1.0/6.0;
+double SGMSTEREO_DEFAULT_CENSUS_WEIGHT_FACTOR = 1.0/6.0;
 extern float ARAP_CENSUS_WEIGHT;
 //const double SGMSTEREO_DEFAULT_CENSUS_WEIGHT_FACTOR = 0.5;
 //const int SGMSTEREO_DEFAULT_AGGREGATION_WINDOW_RADIUS = 2;
@@ -58,7 +58,10 @@ SGMStereo::SGMStereo() : disparityTotal_(SGMSTEREO_DEFAULT_DISPARITY_TOTAL),
 						 aggregationWindowRadius_(SGMSTEREO_DEFAULT_AGGREGATION_WINDOW_RADIUS),
 						 smoothnessPenaltySmall_(SGMSTEREO_DEFAULT_SMOOTHNESS_PENALTY_SMALL),
 						 smoothnessPenaltyLarge_(SGMSTEREO_DEFAULT_SMOOTHNESS_PENALTY_LARGE),
-						 consistencyThreshold_(SGMSTEREO_DEFAULT_CONSISTENCY_THRESHOLD) {}
+						 consistencyThreshold_(SGMSTEREO_DEFAULT_CONSISTENCY_THRESHOLD) 
+{
+	printf("SGMStereo initializaing: censusWeightFactor_ = %lf\n", censusWeightFactor_);
+}
 
 void SGMStereo::setDisparityTotal(const int disparityTotal) {
 	if (disparityTotal <= 0 || disparityTotal%16 != 0) {

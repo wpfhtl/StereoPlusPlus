@@ -701,3 +701,32 @@ void OnMouseComparePixelwiseAndSegmentwisePM(int event, int x, int y, int flags,
 	}
 	cv::imshow("dispImg", tmpCanvas);
 }
+
+
+void OnMouseDBuffers(int event, int x, int y, int flags, void *param)
+{
+	//cv::Mat &canvas = *(cv::Mat*)((void**)param)[0];
+	cv::Mat &dBuffers = *(cv::Mat*)param;
+
+
+	int numRows = dBuffers.rows, numCols = dBuffers.cols;
+	x %= numCols;
+	y %= numRows;
+	//cv::Mat tmp = canvas.clone();
+
+	if (event == CV_EVENT_MOUSEMOVE)
+	{
+
+		cv::Mat tmp = dBuffers.clone();
+		char text[1024];
+		sprintf(text, "(%d, %d) = %.2f", y, x, dBuffers.at<unsigned char>(y, x) / 3.f);
+		cv::putText(tmp, std::string(text), cv::Point2f(20, 50), 0, 0.6, cv::Scalar(0, 0, 255, 1), 2);
+		cv::imshow("dBuffers", tmp);
+		
+	}
+
+	if (event == CV_EVENT_LBUTTONDOWN)
+	{
+		printf("(%d, %d) = %.2f\n", y, x, dBuffers.at<unsigned char>(y, x) / 3.f);
+	}
+}
