@@ -2,6 +2,9 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
+#include <iostream>
+#include <sstream>
+
 #include "StereoAPI.h"
 #include "BPOnFactorGraph.h"
 #include "ReleaseAssert.h"
@@ -597,7 +600,6 @@ void OnMouseTestPlanefitMidd3(int event, int x, int y, int flags, void *param)
 	
 }
 
-
 void OnMouseComparePixelwiseAndSegmentwisePM(int event, int x, int y, int flags, void *param)
 {
 
@@ -702,7 +704,6 @@ void OnMouseComparePixelwiseAndSegmentwisePM(int event, int x, int y, int flags,
 	cv::imshow("dispImg", tmpCanvas);
 }
 
-
 void OnMouseDBuffers(int event, int x, int y, int flags, void *param)
 {
 	//cv::Mat &canvas = *(cv::Mat*)((void**)param)[0];
@@ -728,5 +729,69 @@ void OnMouseDBuffers(int event, int x, int y, int flags, void *param)
 	if (event == CV_EVENT_LBUTTONDOWN)
 	{
 		printf("(%d, %d) = %.2f\n", y, x, dBuffers.at<unsigned char>(y, x) / 3.f);
+	}
+}
+
+void OnMouseDisplayPixelValue(int event, int x, int y, int flags, void *param)
+{
+	// The canvas here may be concatenated by serveral tiles, 
+	// each of which is a of original image sizel.
+
+	std::string title = *(std::string*)((void**)param)[0];
+	cv::Mat &canvas = *(cv::Mat*)((void**)param)[1];
+	cv::Size &tileSize = *(cv::Size*)((void**)param)[2];
+
+	int numRows = tileSize.height;
+	int numCols = tileSize.width;
+
+	int localx = x % numCols;
+	int localy = y % numRows;
+
+	if (x < 0 || x >= canvas.cols || y < 0 || y >= canvas.rows) {
+		std::cout << "position out of bound: " << cv::Point2i(x, y) << "\n";
+		std::cout << "window title = " << title << "\n";
+		exit(-1);
+	}
+
+	std::stringstream ss;
+	std::string text;
+	ss << cv::Point2i(localx, localy) << "  ";
+	switch (canvas.type()) {
+	case CV_8UC3:
+		ss << canvas.at<cv::Vec3b>(y, x);
+		break;
+	case CV_8UC1:
+		ss << (int)canvas.at<unsigned char>(y, x);
+		break;
+	case CV_32FC1:
+		ss << canvas.at<float>(y, x);
+		break;
+	case CV_64FC1:
+		ss << canvas.at<double>(y, x);
+		break;
+	case CV_32FC3:
+		ss << canvas.at<cv::Vec3f>(y, x);
+		break;
+	case CV_64FC3:
+		ss << canvas.at<cv::Vec3d>(y, x);
+		break;
+	}
+	std::getline(ss, text, '\n');
+
+	if (event == CV_EVENT_MOUSEMOVE)
+	{
+		cv::Mat tmp = canvas.clone();
+		if (canvas.channels() > 1) {
+			cv::putText(tmp, text, cv::Point2f(20, 50), 0, 0.6, cv::Scalar(0, 0, 255, 1), 2);
+		}
+		else {
+			cv::putText(tmp, text, cv::Point2f(20, 50), 0, 0.6, cv::Scalar(255, 255, 255, 1), 2);
+		}
+		cv::imshow(title, tmp);
+	}
+	if (event == CV_EVENT_LBUTTONDOWN)
+	{
+		std::cout << text << "\n";
+		//std::cout << title << "\n";
 	}
 }

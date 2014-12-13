@@ -29,6 +29,9 @@
     <Filter Include="daisy">
       <UniqueIdentifier>{0740abba-0b2e-46c5-b64a-5a55c1f7e647}</UniqueIdentifier>
     </Filter>
+    <Filter Include="viewinterp">
+      <UniqueIdentifier>{bd434f70-40ae-4a50-b97e-288aca6bfca1}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="MCImg.h">
@@ -114,6 +117,12 @@
     </ClInclude>
     <ClInclude Include="MeanShift\tdef.h">
       <Filter>MeanShift</Filter>
+    </ClInclude>
+    <ClInclude Include="util.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="Serialize.h">
+      <Filter>utils</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -305,6 +314,12 @@
     </ClCompile>
     <ClCompile Include="GL_Bowling2.cpp">
       <Filter>LocalMethods</Filter>
+    </ClCompile>
+    <ClCompile Include="StereoRectification.cpp">
+      <Filter>viewinterp</Filter>
+    </ClCompile>
+    <ClCompile Include="util.cpp">
+      <Filter>utils</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

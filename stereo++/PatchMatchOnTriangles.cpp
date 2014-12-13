@@ -15,7 +15,7 @@
 #include "PostProcess.h"
 
 #define PROCESS_RIGHT_VIEW
-#define WATER_TIGHT_MESH
+//#define WATER_TIGHT_MESH
 #define SLIC_TRIANGULATION
 
 extern int					PATCHRADIUS;
@@ -643,7 +643,7 @@ static void ProjectTextureOneView(float focalLen, float baselineLen, float alpha
 	printf("leaving........\n");
 }
 
-static void ClusterDisparitiesOtsu(std::vector<float> &dispVals)
+void ClusterDisparitiesOtsu(std::vector<float> &dispVals)
 {
 	// implement Otsu thresholding according to 
 	// http://docs.opencv.org/trunk/doc/py_tutorials/py_imgproc/py_thresholding/py_thresholding.html
@@ -664,7 +664,7 @@ static void ClusterDisparitiesOtsu(std::vector<float> &dispVals)
 
 	// otherwise return two cluster centers by otsu adaptive thresholding
 	// by minimizing the weighted within-class variance
-	const int N = 80;
+	const int N = 256;
 	std::vector<float> P(N);
 	for (int i = 0; i < dispVals.size(); i++) {
 		int d = dispVals[i] + 0.5;
@@ -775,7 +775,7 @@ static std::vector<std::vector<int>> ConstructNeighboring2DVertexGraph(int numRo
 	return vertexNbGraph;
 }
 
-static void BuildWaterTightMesh(int sign, int numRows, int numCols, float focalLen, float baselineLen,
+void BuildWaterTightMesh(int sign, int numRows, int numCols, float focalLen, float baselineLen,
 	std::vector<cv::Point2f> &vertexCoords, std::vector<std::vector<int>> &triVertexInds, std::vector<SlantedPlane> &slantedPlanes,
 	std::vector<cv::Point3f> &meshVertexCoords, std::vector<std::vector<int>> &facetVetexIndsList)
 {
@@ -910,7 +910,8 @@ static void BuildWaterTightMesh(int sign, int numRows, int numCols, float focalL
 	// meshVertexCoords is in (x,y,d) form, project them to (X, Y, Z) form
 	for (int i = 0; i < meshVertexCoords.size(); i++) {
 		//meshVertexCoords[i].z += 240;
-		meshVertexCoords[i].z = std::max(4.f, std::min(79.f, meshVertexCoords[i].z));
+		//meshVertexCoords[i].z = std::max(4.f, std::min(79.f, meshVertexCoords[i].z));
+		meshVertexCoords[i].z = std::max(20.f, std::min(144.f, meshVertexCoords[i].z));
 	}
 	std::vector<cv::Point3f> meshVertexCoordsXyd = meshVertexCoords;
 	for (int i = 0; i < meshVertexCoords.size(); i++) {
@@ -944,7 +945,7 @@ static void BuildWaterTightMesh(int sign, int numRows, int numCols, float focalL
 	/*std::string filePathPly = "d:/data/stereo/" + ROOTFOLDER + "/waterTightMesh.ply";*/
 	std::string filePathPly;
 	std::string filePathSplittingMap;
-	if (sign == -1) {
+	/*if (sign == -1) {
 		filePathPly = "D:/data/Exp13_GenerateMesh/" + ROOTFOLDER + "_meshL.ply";
 		filePathSplittingMap = "D:/data/Exp13_GenerateMesh/" + ROOTFOLDER + "_splittingL.png";
 		filePathTextureImage = "D:/data/Midd2/ThirdSize/" + ROOTFOLDER + "/view1.png";
@@ -953,6 +954,16 @@ static void BuildWaterTightMesh(int sign, int numRows, int numCols, float focalL
 		filePathPly = "D:/data/Exp13_GenerateMesh/" + ROOTFOLDER + "_meshR.ply";
 		filePathSplittingMap = "D:/data/Exp13_GenerateMesh/" + ROOTFOLDER + "_splittingR.png";
 		filePathTextureImage = "D:/data/Midd2/ThirdSize/" + ROOTFOLDER + "/view5.png";
+	}*/
+	if (sign == -1) {
+		filePathPly = "d:/meshL.ply";
+		filePathSplittingMap = "d:/splittingL.png";
+		filePathTextureImage = "d:/pngInputForYamaguchiL.png";
+	}
+	else {
+		filePathPly = "d:/meshR.ply";
+		filePathSplittingMap = "d:/splittingR.png";
+		filePathTextureImage = "d:/pngInputForYamaguchiR.png";
 	}
 	
 	SaveMeshToPly(filePathPly, numRows, numCols, focalLen, baselineLen, meshVertexCoordsXyd,

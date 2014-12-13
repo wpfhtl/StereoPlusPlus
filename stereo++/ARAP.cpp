@@ -1083,7 +1083,7 @@ void RunARAP(std::string rootFolder, cv::Mat &imL, cv::Mat &imR, cv::Mat &dispL,
 	int timeARAPStart = clock();
 	//int downFactor = 2;
 	//cv::resize(imL, imL, cv::Size(imL.cols / downFactor, imL.rows / downFactor));
-	//cv::resize(imR, imR, cv::Size(imR.cols / downFactor, imR.rows / downFactor));
+	//cv::resize(imR, imR, cv::Size(imR.cols / downFactor, imR.rows / downFactor)); 
 
 
 	int numRows = imL.rows, numCols = imL.cols;

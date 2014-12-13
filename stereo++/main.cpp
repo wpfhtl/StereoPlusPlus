@@ -31,6 +31,13 @@
 #endif
 
 
+//int main(int argc, char **argv)
+//{
+//	void TestStereoRectification();
+//	TestStereoRectification();
+//	return 0;
+//}
+
 
 
 std::vector<std::string> &split(const std::string &s, char delim, std::vector<std::string> &elems) {
@@ -307,7 +314,7 @@ std::string runId;
 float RENDER_ALPHA;
 int USE_GT_DISP = 0;
 std::string filePathRenderOutput;
-#if 1
+#if 0
 static void PrintProgramEntryHeader(std::string methodName, int id)
 {
 	printf("\n\n========================================================\n");

@@ -22,6 +22,63 @@ static cv::Vec3f CrossProduct(cv::Vec3f& u, cv::Vec3f& v)
 	return w;
 }
 
+void SavePointCloudToPly(std::string filePathPly, cv::Mat &XYZ, cv::Mat &img, cv::Mat &validPixels = cv::Mat())
+{
+	ASSERT(XYZ.channels() == 3);
+
+	if (validPixels.empty()) {
+		validPixels = 255 * cv::Mat::ones(img.rows, img.cols, CV_8UC1);
+	}
+
+	int numValidPixels = 0;
+	for (int y = 0; y < img.rows; y++) {
+		for (int x = 0; x < img.cols; x++) {
+			if (validPixels.at<bool>(y, x)
+				&& XYZ.at<cv::Vec3f>(y, x)[2] != 0 
+				&& isfinite(XYZ.at<cv::Vec3f>(y, x)[0])
+				&& isfinite(XYZ.at<cv::Vec3f>(y, x)[1])
+				&& isfinite(XYZ.at<cv::Vec3f>(y, x)[2])) {
+				numValidPixels++;
+			}
+		}
+	}
+
+	FILE *fid = fopen(filePathPly.c_str(), "w");
+	fprintf(fid, "ply\nformat ascii 1.0 \nelement vertex %d \n", numValidPixels);
+	fprintf(fid, "property float x \nproperty float y \nproperty float z \nproperty float nx \nproperty float ny \nproperty float nz \n");
+	fprintf(fid, "property uchar red \nproperty uchar green \nproperty uchar blue \n");
+	fprintf(fid, "end_header \n");
+
+	for (int y = 0; y < img.rows; y++) {
+		for (int x = 0; x < img.cols; x++) {
+
+			cv::Vec3b c = img.at<cv::Vec3b>(y, x);
+			cv::Vec3f A, B, C;
+			A = XYZ.at<cv::Vec3f>(y, x);
+			if (!validPixels.at<bool>(y, x) || A[2] == 0 
+				|| !isfinite(A[0]) || !isfinite(A[1]) || !isfinite(A[2])) {
+				continue;	// do not process invalid pixels
+			}
+
+			B = A;
+			C = A;
+			if (x + 1 < XYZ.cols) {
+				B = XYZ.at<cv::Vec3f>(y, x + 1);
+			}
+			if (y + 1 < XYZ.rows) {
+				C = XYZ.at<cv::Vec3f>(y + 1, x);
+			}
+			cv::Vec3f N = CrossProduct(C - A, B - A);
+			if (!isfinite(N[0]) || !isfinite(N[1]) || !isfinite(N[2])) {
+				N = cv::Vec3f(0, 0, -1.f);
+			}
+			fprintf(fid, "%f %f %f %f %f %f %d %d %d\n", A[0], A[1], A[2], N[0], N[1], N[2], c[2], c[1], c[0]);
+		}
+	}
+
+	fclose(fid);
+}
+
 void SaveDisparityToPly(cv::Mat &disp, cv::Mat& img, float maxDisp, 
 	std::string workingDir, std::string plyFilePath, cv::Mat &validPixelMap = cv::Mat())
 {
@@ -31,10 +88,15 @@ void SaveDisparityToPly(cv::Mat &disp, cv::Mat& img, float maxDisp,
 	}
 	int numValidPixels = cv::countNonZero(validPixelMap);
 
-	const float f = 3740;
-	const float B = 160;
-	const float cutoff = 0;
-	float dmin = 270;
+	//const float f = 3740;
+	//const float B = 160;
+	//const float cutoff = 0;
+	//float dmin = 270;
+
+	const float f = 539.359;
+	const float B = 0.249949;
+	const float cutoff = 20;
+	float dmin = 0;
 
 	FILE *fid = fopen((workingDir + "/dmin.txt").c_str(), "r");
 	if (fid != NULL) {
@@ -359,7 +421,8 @@ void SaveMeshToPly(std::string plyFilePath, int numRows, int numCols, float foca
 	std::vector<cv::Point3f> &meshVertexCoordsXyd, std::vector<std::vector<int>> &facetVetexIndsList, 
 	std::string textureFilePath, bool showInstantly = false)
 {
-	int dmin = 270;
+	//int dmin = 270;
+	int dmin = 0;
 	extern std::string ROOTFOLDER;
 	std::string filePathDmin = "D:/data/Midd2/ThirdSize/" + ROOTFOLDER + "/dmin.txt";
 	FILE* f = fopen(filePathDmin.c_str(), "r");
@@ -374,7 +437,8 @@ void SaveMeshToPly(std::string plyFilePath, int numRows, int numCols, float foca
 	std::vector<cv::Point3f> meshVertexCoordsXYZ(meshVertexCoordsXyd.size());
 	for (int i = 0; i < meshVertexCoordsXyd.size(); i++) {
 		float d = meshVertexCoordsXyd[i].z;
-		d = std::max(0.f, std::min(79.f, d));
+		/*d = std::max(0.f, std::min(79.f, d));*/
+		d = std::max(10.f, std::min(256.f, d));
 		d += dmin; 
 		float Z = focalLen * baselineLen / d;
 		float X = meshVertexCoordsXyd[i].x * Z / focalLen;
@@ -448,4 +512,99 @@ void SaveMeshToPly(std::string plyFilePath, int numRows, int numCols, float foca
 		std::string cmd = "meshlab " + plyFilePath;
 		system(cmd.c_str());
 	}
+}
+
+void SaveMeshToPly(std::string plyFilePath, 
+	std::vector<cv::Point3f> &meshVertexCoordsXYZ, std::vector<std::vector<int>> &facetVetexIndsList,
+	std::vector<cv::Point2f> &textureCoords,
+	std::string textureFilePath, bool showInstantly = false)
+{
+	int numElementVertices = meshVertexCoordsXYZ.size();
+	int numElementFacets = facetVetexIndsList.size();
+
+	// Step 1 - print the header
+	printf("saving ply file %s .......\n", plyFilePath.c_str());
+	FILE *fid = fopen(plyFilePath.c_str(), "w");
+	ASSERT(fid != NULL);
+	fprintf(fid,
+		"ply\n"
+		"format ascii 1.0\n"
+		"comment TextureFile %s\n"
+		"element vertex %d\n"
+		"property float x\n"
+		"property float y\n"
+		"property float z\n"
+		"element face %d\n"
+		"property list uchar int vertex_indices\n"
+		"property list uchar float texcoord\n"
+		"end_header\n",
+		textureFilePath.c_str(),
+		numElementVertices,
+		numElementFacets
+		);
+
+	cv::Mat textureImg = cv::imread(textureFilePath);
+	printf("textureFilePath = %s\n", textureFilePath.c_str());
+	ASSERT(!textureImg.empty());
+
+	// Step 2 - print vertices coordinates in 3D
+	for (int i = 0; i < numElementVertices; i++) {
+		fprintf(fid, "%f %f %f\n",
+			meshVertexCoordsXYZ[i].x, meshVertexCoordsXYZ[i].y, meshVertexCoordsXYZ[i].z);
+	}
+
+	// Step 3 - print each triangle's vertex index and texture coordinates
+	for (int id = 0; id < facetVetexIndsList.size(); id++) {
+		cv::Point2f p0 = textureCoords[facetVetexIndsList[id][0]];
+		cv::Point2f p1 = textureCoords[facetVetexIndsList[id][1]];
+		cv::Point2f p2 = textureCoords[facetVetexIndsList[id][2]];
+
+		p0.y = 1.0 - p0.y;
+		p1.y = 1.0 - p1.y;
+		p2.y = 1.0 - p2.y;
+
+		int i0 = facetVetexIndsList[id][0];
+		int i1 = facetVetexIndsList[id][1];
+		int i2 = facetVetexIndsList[id][2];
+
+		fprintf(fid, "3 %d %d %d 6 %f %f %f %f %f %f\n",
+			i2, i1, i0, p2.x, p2.y, p1.x, p1.y, p0.x, p0.y);
+	}
+
+	fclose(fid);
+
+	if (showInstantly) {
+		std::string cmd = "meshlab " + plyFilePath;
+		system(cmd.c_str());
+	}
+}
+
+void SavePointCloudToPly(std::string filePathPly, std::vector<cv::Point3f> &points, 
+	std::vector<cv::Vec3b> &colors = std::vector<cv::Vec3b>())
+{
+	if (colors.empty()) {
+		colors.resize(points.size());
+		for (int i = 0; i < points.size(); i++) {
+			if (i % 2 == 0) {
+				colors[i] = cv::Vec3b(0, 255, 0);
+			}
+			else {
+				colors[i] = cv::Vec3b(255, 0, 0);
+			}
+		}
+	}
+
+	FILE *fid = fopen(filePathPly.c_str(), "w");
+	fprintf(fid, "ply\nformat ascii 1.0 \nelement vertex %d \n", points.size());
+	fprintf(fid, "property float x \nproperty float y \nproperty float z \n");
+	fprintf(fid, "property uchar red \nproperty uchar green \nproperty uchar blue \n");
+	fprintf(fid, "end_header \n");
+
+	for (int i = 0; i < points.size(); i++) {
+		cv::Point3f p = points[i];
+		cv::Vec3b c = colors[i];
+		fprintf(fid, "%f %f %f %d %d %d\n", p.x, p.y, p.z, c[0], c[1], c[2]);
+	}
+
+	fclose(fid);
 }

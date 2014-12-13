@@ -82,7 +82,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <IncludePath>D:\code\stereo++\stereo++;D:\code\opencv\build\include;D:\code\eigen-eigen-ffa86ffb5570;D:\code\opencv\sources\3rdparty\libpng;D:\code\stereo++\stereo++\png++;$(IncludePath);D:\code\stereo++\stereo++\daisy-1.8.1\include;D:\code\fadeRelease\include_fade2d;D:\code\opencv\sources\3rdparty\libpng;D:\code\freeglut\include</IncludePath>
-    <LibraryPath>D:\code\opencv\build\x64\vc12\lib;D:\code\opencv\build\x64\vc12\staticlib;D:\code\fadeRelease\x64;$(LibraryPath);D:\code\freeglut\lib\x64</LibraryPath>
+    <LibraryPath>D:\code\fadeRelease\x64;D:\code\freeglut\lib\x64;D:\code\opencv\build\x64\vc12\lib;D:\code\opencv\build\x64\vc12\staticlib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -173,6 +173,7 @@
     <ClInclude Include="poly2tri\sweep\sweep_context.h" />
     <ClInclude Include="PostProcess.h" />
     <ClInclude Include="ReleaseAssert.h" />
+    <ClInclude Include="Serialize.h" />
     <ClInclude Include="SlantedPlane.h" />
     <ClInclude Include="SLIC\SLIC.h" />
     <ClInclude Include="spsstereo\defParameter.h" />
@@ -180,6 +181,7 @@
     <ClInclude Include="spsstereo\SPSStereo.h" />
     <ClInclude Include="StereoAPI.h" />
     <ClInclude Include="Timer.h" />
+    <ClInclude Include="util.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ARAP.cpp" />
@@ -240,11 +242,13 @@
     <ClCompile Include="spsstereo\SGMStereo.cpp" />
     <ClCompile Include="spsstereo\SPSStereo.cpp" />
     <ClCompile Include="StereoFlow.cpp" />
+    <ClCompile Include="StereoRectification.cpp" />
     <ClCompile Include="test.cpp" />
     <ClCompile Include="TestEigen.cpp" />
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="Triangulate2D.cpp" />
     <ClCompile Include="other_mains.cpp" />
+    <ClCompile Include="util.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="MeanShift\MSReadme.txt" />

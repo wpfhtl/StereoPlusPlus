@@ -10,4 +10,7 @@
 		exit(-1);										\
 	}
 
+#define LOGLINE()	\
+	printf("RUNNING AT LINE %d, %s\n", __LINE__, __FILE__);
+
 #endif
